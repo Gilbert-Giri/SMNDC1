@@ -1,3 +1,4 @@
+#RSEM v1.3.1
 index="Human/RSEM/hg38"
 bamdir="../STAR_mapped"
 outdir="../RSEM"
