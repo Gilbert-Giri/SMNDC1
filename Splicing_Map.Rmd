@@ -1,0 +1,544 @@
+---
+title: "Splicing Maps"
+output: html_document
+date: "2023-08-04"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Common Functions
+```{r}
+#Function to calculate sum of features
+Sum_JC<-function(x){sum(as.numeric(strsplit(x,split = ",")[[1]]))}
+Sum_Counts<-function(df){
+  df$IJC_Sum_1<-sapply(df$IJC_SAMPLE_1,Sum_JC)
+  df$IJC_Sum_2<-sapply(df$IJC_SAMPLE_2,Sum_JC)
+  df$SJC_Sum_1<-sapply(df$SJC_SAMPLE_1,Sum_JC)
+  df$SJC_Sum_2<-sapply(df$SJC_SAMPLE_2,Sum_JC)
+  df$Total_Count_1<-df$IJC_Sum_1+df$SJC_Sum_1
+  df$Total_Count_2<-df$IJC_Sum_2+df$SJC_Sum_2
+  return(df)
+}
+
+
+#Getting Counts for the Bins; Bin-size=1
+Get_Bins<-function(x){
+  #Getting the Coordinates
+  Chr<-x$chr
+  Strand<-x$strand
+  ExonsS<-x$exonStart_0base
+  ExonE<-x$exonEnd
+  UpstreamES<-x$upstreamES
+  UpstreamEE<-x$upstreamEE
+  DownstreamES<-x$downstreamES
+  DownstreamEE<-x$downstreamEE
+  
+  
+  #getting the matrices ready
+  mat1<-matrix(NA,nrow=nrow(x),ncol=350)
+  mat2<-matrix(NA,nrow=nrow(x),ncol=350)
+  mat3<-matrix(NA,nrow=nrow(x),ncol=350)
+  mat4<-matrix(NA,nrow=nrow(x),ncol=350)
+  
+  bin<-1
+  for (i in 1:nrow(x)){
+    
+    #For Upstream Exons
+    for (j in 1:350){
+      if (UpstreamEE[i]-50+bin*(j-1)>=UpstreamES[i] & UpstreamEE[i]-50+bin*(j-1)<= ExonsS[i]){
+        mat1[i,j]<-paste0(Chr[i],":",UpstreamEE[i]-50+bin*(j-1),"-",UpstreamEE[i]-50+bin*(j-1),"_",Strand[i])
+      } else {
+        mat1[i,j]<-0
+      }
+    }
+    
+    #For 5' end of the exon
+    for (j in 1:350){
+      if (ExonsS[i]-300+bin*(j-1)>=UpstreamEE[i] & ExonsS[i]-300+bin*(j-1)<=ExonE[i]){
+        mat2[i,j]<-paste0(Chr[i],":",ExonsS[i]-300+bin*(j-1),"-",ExonsS[i]-300+bin*(j-1),"_",Strand[i])
+      } else {
+        mat2[i,j]<-0
+      }
+    }
+    
+    #For 3' end of the exon
+    for (j in 1:350){
+      if (ExonE[i]-50+bin*(j-1)>=ExonsS[i] & ExonE[i]-50+bin*(j-1)<=DownstreamES[i]){
+        mat3[i,j]<-paste0(Chr[i],":",ExonE[i]-50+bin*(j-1),"-",ExonE[i]-50+bin*(j-1),"_",Strand[i])
+      } else {
+        mat3[i,j]<-0
+      }
+    }
+    
+    #For Downstream exon
+    for (j in 1:350){
+      if (DownstreamES[i]-300+bin*(j-1)>=ExonE[i] & DownstreamES[i]-300+bin*(j-1)<=DownstreamEE[i]){
+        mat4[i,j]<-paste0(Chr[i],":",DownstreamES[i]-300+bin*(j-1),"-",DownstreamES[i]-300+bin*(j-1),"_",Strand[i])
+      } else {
+        mat4[i,j]<-0
+      }
+    }
+  }
+  combined<-as.data.frame(cbind(mat1,mat2,mat3,mat4))
+  rownames(combined)<-x$Identifier
+  return(combined)
+}
+```
+
+##ENCODE-K562 Splice Map
+```{r}
+SE<-read.table("rMATS/SMNDC1_K562/SE.MATS.JC.txt",header=T)
+SE<-Sum_Counts(SE)
+SE<-SE[which(SE$Total_Count_1>20 & SE$Total_Count_2>20),] #40532
+SE$Identifier<- paste0(SE$GeneID,"_",SE$chr,"_",SE$exonStart_0base,"-",SE$exonEnd,"_",SE$upstreamES,"-",SE$upstreamEE,"_",SE$downstreamES,"-",SE$downstreamEE,"_",SE$strand)
+SE_bed<-SE[c("chr","exonStart_0base","exonEnd","Identifier","Total_Count_1","strand")]
+write.table(SE_bed,"rMATS/SMNDC1_K562_SE.bed",col.names=F,row.names = F,quote=F,sep="\t")
+
+#sort -k1,1 -k2,2n SMNDC1_K562_SE.bed | bedtools merge -s -c 4,5 -o collapse -delim "," > SMNDC1_K562_SE_merged.bed
+
+Merged<-read.table("rMATS/SMNDC1_K562_SE_merged.bed")
+
+#Keeping Overlaping ExonID that have highest Inclusion in Controls
+for (i in 1:dim(Merged)[1]){
+  if (grepl(",",Merged$V5[i])){
+    nums<-which.max(as.integer(strsplit(Merged$V5[i],",")[[1]]))
+    Merged$V4[i]<-strsplit(Merged$V4[i],",")[[1]][nums]
+  }
+}
+
+SE<-SE[which(SE$Identifier %in% Merged$V4),]
+SE$Sig_Status<-ifelse(abs(SE$IncLevelDifference)>0.05 & SE$FDR<0.1 & SE$PValue<0.05,"Sig","Not_sig")
+SE$Mean_Inc_Level_1<-sapply(SE$IncLevel1,function(x){mean(as.numeric(strsplit(x,",")[[1]]),na.rm=T)})
+SE$Mean_Inc_Level_2<-sapply(SE$IncLevel2,function(x){mean(as.numeric(strsplit(x,",")[[1]]),na.rm=T)})
+
+#Classifying the Events-Retained or Skipped Upon KD
+Retained<-SE[which(SE$Sig_Status=="Sig" & SE$IncLevelDifference<0),] #114
+Skipped<-SE[which(SE$Sig_Status=="Sig" & SE$IncLevelDifference>0),] #245
+Control_Set<-SE[which(SE$Sig_Status=="Not_sig" & SE$Mean_Inc_Level_1>0.1 & SE$Mean_Inc_Level_1<0.9),] #3078
+
+#Getting the Peak file
+
+#K562
+rep1<-read.table("eCLIP_Peaks/ENCFF927UFK_SMNDC1_K562_01.bed")
+rep2<-read.table("eCLIP_Peaks/ENCFF723GHJ_SMNDC1_K562_02.bed")
+peaks<-rbind(rep1,rep2)
+peaks<-peaks[which(peaks$V7>1 & peaks$V8>(-log10(0.001))),1:8] #Filtering for p-val<0.001 & enrichment>2
+colnames(peaks)<-c("Chr","Start","End","Exp","Score","Strand","Enrichment","Pval")
+peaks_gr<-GenomicRanges::makeGRangesFromDataFrame(peaks,keep.extra.columns = T)
+K562_peaks_reduced<-GenomicRanges::reduce(peaks_gr,min.gapwidth=10) #Combining Peaks that are within 10bp of each other
+
+#
+Counts<-list("Retained"=Retained,"Skipped"=Skipped,"Control"=Control_Set)
+Counts<-lapply(Counts,Get_Bins)
+Counts<-lapply(Counts,function(x){x$Identifier<-rownames(x);return(x)})
+Counts_l<-lapply(Counts,function(x){y<-reshape2::melt(x,id.vars="Identifier");return(y)})
+Counts_l<-lapply(Counts_l,function(x){y<-x[which(x$value != 0),]})
+
+#Getting Overlaps
+Make_Ranges<-function(df){
+  df$Chr<-sapply(df$value,function(x){strsplit(x,":")[[1]][1]})
+  df$Start<-sapply(df$value,function(x){strsplit(x,":|-|_")[[1]][2]})
+  df$End<-sapply(df$value,function(x){strsplit(x,":|-|_")[[1]][3]})
+  df$strand<-sapply(df$value,function(x){strsplit(x,"_")[[1]][2]})
+  df_gr<-GenomicRanges::makeGRangesFromDataFrame(df,strand.field="strand",keep.extra.columns=T)
+  return(df_gr)
+}
+
+Counts_gr<-lapply(Counts_l,Make_Ranges)
+
+for (n in names(Counts_gr)){
+  ov<-GenomicRanges::countOverlaps(Counts_gr[[n]],K562_peaks_reduced)
+  GenomicRanges::values(Counts_gr[[n]])<-cbind(GenomicRanges::values(Counts_gr[[n]]),ov)
+}
+
+Values<-lapply(Counts_gr,function(x){y<-as.data.frame(GenomicRanges::values(x));return(y)})
+
+##### For Overlaps
+Values_wide_K562<-lapply(Values,function(x){y<-reshape(x[c("Identifier","variable","ov")],idvar = "Identifier", timevar = "variable", direction = "wide");return(y)})
+
+for (n in names(Values_wide_K562)){
+  rownames(Values_wide_K562[[n]])<-Values_wide_K562[[n]][,1]
+  Values_wide_K562[[n]]<-Values_wide_K562[[n]][,-1]
+  strand<-sapply(rownames(Values_wide_K562[[n]]),function(x){strsplit(x,"_")[[1]][6]})
+  Values_wide_K562[[n]][which(strand=="-"),]<-Values_wide_K562[[n]][which(strand=="-"),ncol(Values_wide_K562[[n]]):1]
+}
+
+Retained_Sums_K562<-colSums(Values_wide_K562$Retained,na.rm = T)/nrow(Values_wide_K562$Retained)
+Skipped_Sums_K562<-colSums(Values_wide_K562$Skipped,na.rm = T)/nrow(Values_wide_K562$Skipped)
+Control_Sums_K562<-colSums(Values_wide_K562$Control,na.rm = T)/nrow(Values_wide_K562$Control)
+
+plot(Retained_Sums_K562,col="Blue",type="l",ylim=c(0,0.1),lwd=5)
+points(Skipped_Sums_K562,col="Red",type="l",lwd=5)
+points(Control_Sums_K562,col="Black",type="l",lwd=5)
+abline(v=c(50,650,750,1350))
+
+Combined<-as.data.frame(rbind(cbind(1:1400,Retained_Sums_K562,"Retained"),
+                              cbind(1:1400,Skipped_Sums_K562,"Skipped"),
+                              cbind(1:1400,Control_Sums_K562,"Control")))
+
+colnames(Combined)<-c("Pos","Counts","Group")
+Combined$Pos<-as.numeric(Combined$Pos)
+Combined$Counts<-as.numeric(Combined$Counts)
+write.table(Combined,"Summary_Files/Encode_K562_SM_Counts.txt",sep="\t",row.names = F,col.names = T,quote=F)
+```
+
+##ENCODE-HepG2 Splice Map
+```{r}
+SE<-read.table("rMATS/SMNDC1_HepG2/SE.MATS.JC.txt",header=T)
+SE<-Sum_Counts(SE)
+SE<-SE[which(SE$Total_Count_1>20 & SE$Total_Count_2>20),] #35932
+SE$Identifier<- paste0(SE$GeneID,"_",SE$chr,"_",SE$exonStart_0base,"-",SE$exonEnd,"_",SE$upstreamES,"-",SE$upstreamEE,"_",SE$downstreamES,"-",SE$downstreamEE,"_",SE$strand)
+SE_bed<-SE[c("chr","exonStart_0base","exonEnd","Identifier","Total_Count_1","strand")]
+write.table(SE_bed,"rMATS/SMNDC1_HepG2_SE.bed",col.names=F,row.names = F,quote=F,sep="\t")
+
+#sort -k1,1 -k2,2n SMNDC1_HepG2_SE.bed | bedtools merge -s -c 4,5 -o collapse -delim "," > SMNDC1_HepG2_SE_merged.bed
+
+Merged<-read.table("rMATS/SMNDC1_HepG2_SE_merged.bed")
+
+#Keeping Overlaping ExonID that have highest Inclusion in Controls
+for (i in 1:dim(Merged)[1]){
+  if (grepl(",",Merged$V5[i])){
+    nums<-which.max(as.integer(strsplit(Merged$V5[i],",")[[1]]))
+    Merged$V4[i]<-strsplit(Merged$V4[i],",")[[1]][nums]
+  }
+}
+
+SE<-SE[which(SE$Identifier %in% Merged$V4),]
+SE$Sig_Status<-ifelse(abs(SE$IncLevelDifference)>0.05 & SE$FDR<0.1 & SE$PValue<0.05,"Sig","Not_sig")
+SE$Mean_Inc_Level_1<-sapply(SE$IncLevel1,function(x){mean(as.numeric(strsplit(x,",")[[1]]),na.rm=T)})
+SE$Mean_Inc_Level_2<-sapply(SE$IncLevel2,function(x){mean(as.numeric(strsplit(x,",")[[1]]),na.rm=T)})
+
+#Classifying the Events-Retained or Skipped Upon KD
+Retained<-SE[which(SE$Sig_Status=="Sig" & SE$IncLevelDifference<0),] #151
+Skipped<-SE[which(SE$Sig_Status=="Sig" & SE$IncLevelDifference>0),] #173
+Control_Set<-SE[which(SE$Sig_Status=="Not_sig" & SE$Mean_Inc_Level_1>0.1 & SE$Mean_Inc_Level_1<0.9),] #3482
+
+#Getting the Peak file
+
+#K562
+rep1<-read.table("eCLIP_Peaks/ENCFF356SSO_SMNDC1_HepG2_01.bed")
+rep2<-read.table("eCLIP_Peaks/ENCFF588UIR_SMNDC1_HepG2_02.bed")
+peaks<-rbind(rep1,rep2)
+peaks<-peaks[which(peaks$V7>1 & peaks$V8>(-log10(0.001))),1:8] #Filtering for p-val<0.001 & enrichment>2
+colnames(peaks)<-c("Chr","Start","End","Exp","Score","Strand","Enrichment","Pval")
+peaks_gr<-GenomicRanges::makeGRangesFromDataFrame(peaks,keep.extra.columns = T)
+HepG2_peaks_reduced<-GenomicRanges::reduce(peaks_gr,min.gapwidth=10) #Combining Peaks that are within 10bp of each other
+
+#
+Counts<-list("Retained"=Retained,"Skipped"=Skipped,"Control"=Control_Set)
+Counts<-lapply(Counts,Get_Bins)
+Counts<-lapply(Counts,function(x){x$Identifier<-rownames(x);return(x)})
+Counts_l<-lapply(Counts,function(x){y<-reshape2::melt(x,id.vars="Identifier");return(y)})
+Counts_l<-lapply(Counts_l,function(x){y<-x[which(x$value != 0),]})
+
+#Getting Overlaps
+Make_Ranges<-function(df){
+  df$Chr<-sapply(df$value,function(x){strsplit(x,":")[[1]][1]})
+  df$Start<-sapply(df$value,function(x){strsplit(x,":|-|_")[[1]][2]})
+  df$End<-sapply(df$value,function(x){strsplit(x,":|-|_")[[1]][3]})
+  df$strand<-sapply(df$value,function(x){strsplit(x,"_")[[1]][2]})
+  df_gr<-GenomicRanges::makeGRangesFromDataFrame(df,strand.field="strand",keep.extra.columns=T)
+  return(df_gr)
+}
+
+Counts_gr<-lapply(Counts_l,Make_Ranges)
+
+for (n in names(Counts_gr)){
+  ov<-GenomicRanges::countOverlaps(Counts_gr[[n]],HepG2_peaks_reduced)
+  GenomicRanges::values(Counts_gr[[n]])<-cbind(GenomicRanges::values(Counts_gr[[n]]),ov)
+}
+
+Values<-lapply(Counts_gr,function(x){y<-as.data.frame(GenomicRanges::values(x));return(y)})
+
+##### For Overlaps
+Values_wide_HepG2<-lapply(Values,function(x){y<-reshape(x[c("Identifier","variable","ov")],idvar = "Identifier", timevar = "variable", direction = "wide");return(y)})
+
+for (n in names(Values_wide_HepG2)){
+  rownames(Values_wide_HepG2[[n]])<-Values_wide_HepG2[[n]][,1]
+  Values_wide_HepG2[[n]]<-Values_wide_HepG2[[n]][,-1]
+  strand<-sapply(rownames(Values_wide_HepG2[[n]]),function(x){strsplit(x,"_")[[1]][6]})
+  Values_wide_HepG2[[n]][which(strand=="-"),]<-Values_wide_HepG2[[n]][which(strand=="-"),ncol(Values_wide_HepG2[[n]]):1]
+}
+
+Retained_Sums_HepG2<-colSums(Values_wide_HepG2$Retained,na.rm = T)/nrow(Values_wide_HepG2$Retained)
+Skipped_Sums_HepG2<-colSums(Values_wide_HepG2$Skipped,na.rm = T)/nrow(Values_wide_HepG2$Skipped)
+Control_Sums_HepG2<-colSums(Values_wide_HepG2$Control,na.rm = T)/nrow(Values_wide_HepG2$Control)
+
+plot(Retained_Sums_HepG2,col="Blue",type="l",ylim=c(0,0.1),lwd=5)
+points(Skipped_Sums_HepG2,col="Red",type="l",lwd=5)
+points(Control_Sums_HepG2,col="Black",type="l",lwd=5)
+abline(v=c(50,650,750,1350))
+
+Combined<-as.data.frame(rbind(cbind(1:1400,Retained_Sums_HepG2,"Retained"),
+                              cbind(1:1400,Skipped_Sums_HepG2,"Skipped"),
+                              cbind(1:1400,Control_Sums_HepG2,"Control")))
+
+colnames(Combined)<-c("Pos","Counts","Group")
+Combined$Pos<-as.numeric(Combined$Pos)
+Combined$Counts<-as.numeric(Combined$Counts)
+write.table(Combined,"Summary_Files/Encode_HepG2_SM_Counts.txt",sep="\t",row.names = F,col.names = T,quote=F)
+```
+
+#Pancreatic Skipped Exons
+```{r}
+SE<-read.table("rMATS/Pancreas/SE.MATS.JC.txt",header=T)
+SE<-Sum_Counts(SE)
+SE<-SE[which(SE$Total_Count_1>30 & SE$Total_Count_2>30),] #73928
+SE$Identifier<- paste0(SE$GeneID,"_",SE$chr,"_",SE$exonStart_0base,"-",SE$exonEnd,"_",SE$upstreamES,"-",SE$upstreamEE,"_",SE$downstreamES,"-",SE$downstreamEE,"_",SE$strand)
+SE_bed<-SE[c("chr","exonStart_0base","exonEnd","Identifier","Total_Count_1","strand")]
+write.table(SE_bed,"rMATS/SMNDC1_Pancreas_SE.bed",col.names=F,row.names = F,quote=F,sep="\t")
+
+#sort -k1,1 -k2,2n SMNDC1_Pancreas_SE.bed | bedtools merge -s -c 4,5 -o collapse -delim "," > SMNDC1_Pancreas_SE_merged.bed
+
+Merged<-read.table("rMATS/SMNDC1_Pancreas_SE_merged.bed")
+
+#Keeping Overlaping ExonID that have highest Inclusion in Controls
+for (i in 1:dim(Merged)[1]){
+  if (grepl(",",Merged$V5[i])){
+    nums<-which.max(as.integer(strsplit(Merged$V5[i],",")[[1]]))
+    Merged$V4[i]<-strsplit(Merged$V4[i],",")[[1]][nums]
+  }
+}
+
+SE<-SE[which(SE$Identifier %in% Merged$V4),]
+SE$Sig_Status<-ifelse(abs(SE$IncLevelDifference)>0.05 & SE$FDR<0.1 & SE$PValue<0.05,"Sig","Not_sig")
+SE$Mean_Inc_Level_1<-sapply(SE$IncLevel1,function(x){mean(as.numeric(strsplit(x,",")[[1]]),na.rm=T)})
+SE$Mean_Inc_Level_2<-sapply(SE$IncLevel2,function(x){mean(as.numeric(strsplit(x,",")[[1]]),na.rm=T)})
+
+Retained<-SE[which(SE$Sig_Status=="Sig" & SE$IncLevelDifference<0),] #373
+Skipped<-SE[which(SE$Sig_Status=="Sig" & SE$IncLevelDifference>0),] #1088
+Control_Set<-SE[which(SE$Sig_Status=="Not_sig" & SE$Mean_Inc_Level_1>0.1 & SE$Mean_Inc_Level_1<0.9),] #3754
+
+#Getting the Peak file
+
+#HepG2
+rep1<-read.table("eCLIP_Peaks/ENCFF356SSO_SMNDC1_HepG2_01.bed")
+rep2<-read.table("eCLIP_Peaks//ENCFF588UIR_SMNDC1_HepG2_02.bed")
+peaks<-rbind(rep1,rep2)
+peaks<-peaks[which(peaks$V7>1 & peaks$V8>(-log10(0.001))),1:8]
+colnames(peaks)<-c("Chr","Start","End","Exp","Score","Strand","Enrichment","Pval")
+peaks_gr<-GenomicRanges::makeGRangesFromDataFrame(peaks,keep.extra.columns = T)
+HepG2_peaks_reduced<-GenomicRanges::reduce(peaks_gr,min.gapwidth=10)
+
+#K562
+rep1<-read.table("eCLIP_Peaks/ENCFF927UFK_SMNDC1_K562_01.bed")
+rep2<-read.table("eCLIP_Peaks/ENCFF723GHJ_SMNDC1_K562_02.bed")
+peaks<-rbind(rep1,rep2)
+peaks<-peaks[which(peaks$V7>1 & peaks$V8>(-log10(0.001))),1:8]
+colnames(peaks)<-c("Chr","Start","End","Exp","Score","Strand","Enrichment","Pval")
+peaks_gr<-GenomicRanges::makeGRangesFromDataFrame(peaks,keep.extra.columns = T)
+K562_peaks_reduced<-GenomicRanges::reduce(peaks_gr,min.gapwidth=10)
+
+#
+Counts<-list("Retained"=Retained,"Skipped"=Skipped,"Control"=Control_Set)
+Counts<-lapply(Counts,Get_Bins)
+Counts<-lapply(Counts,function(x){x$Identifier<-rownames(x);return(x)})
+Counts_l<-lapply(Counts,function(x){y<-reshape2::melt(x,id.vars="Identifier");return(y)})
+Counts_l<-lapply(Counts_l,function(x){y<-x[which(x$value != 0),]})
+
+#Getting Overlaps
+Make_Ranges<-function(df){
+  df$Chr<-sapply(df$value,function(x){strsplit(x,":")[[1]][1]})
+  df$Start<-sapply(df$value,function(x){strsplit(x,":|-|_")[[1]][2]})
+  df$End<-sapply(df$value,function(x){strsplit(x,":|-|_")[[1]][3]})
+  df$strand<-sapply(df$value,function(x){strsplit(x,"_")[[1]][2]})
+  df_gr<-GenomicRanges::makeGRangesFromDataFrame(df,strand.field="strand",keep.extra.columns=T)
+  return(df_gr)
+}
+
+Counts_gr<-lapply(Counts_l,Make_Ranges)
+
+for (n in names(Counts_gr)){
+  ov_HepG2<-GenomicRanges::countOverlaps(Counts_gr[[n]],HepG2_peaks_reduced)
+  ov_K562<-GenomicRanges::countOverlaps(Counts_gr[[n]],K562_peaks_reduced)
+  GenomicRanges::values(Counts_gr[[n]])<-cbind(GenomicRanges::values(Counts_gr[[n]]),ov_HepG2,ov_K562)
+}
+
+Values<-lapply(Counts_gr,function(x){y<-as.data.frame(GenomicRanges::values(x));return(y)})
+
+##### For Overlaps
+Values_wide_HepG2<-lapply(Values,function(x){y<-reshape(x[c("Identifier","variable","ov_HepG2")],idvar = "Identifier", timevar = "variable", direction = "wide");return(y)})
+Values_wide_K562<-lapply(Values,function(x){y<-reshape(x[c("Identifier","variable","ov_K562")],idvar = "Identifier", timevar = "variable", direction = "wide");return(y)})
+
+
+for (n in names(Values_wide_HepG2)){
+  rownames(Values_wide_HepG2[[n]])<-Values_wide_HepG2[[n]][,1]
+  Values_wide_HepG2[[n]]<-Values_wide_HepG2[[n]][,-1]
+  strand<-sapply(rownames(Values_wide_HepG2[[n]]),function(x){strsplit(x,"_")[[1]][6]})
+  Values_wide_HepG2[[n]][which(strand=="-"),]<-Values_wide_HepG2[[n]][which(strand=="-"),ncol(Values_wide_HepG2[[n]]):1]
+}
+
+for (n in names(Values_wide_K562)){
+  rownames(Values_wide_K562[[n]])<-Values_wide_K562[[n]][,1]
+  Values_wide_K562[[n]]<-Values_wide_K562[[n]][,-1]
+  strand<-sapply(rownames(Values_wide_K562[[n]]),function(x){strsplit(x,"_")[[1]][6]})
+  Values_wide_K562[[n]][which(strand=="-"),]<-Values_wide_K562[[n]][which(strand=="-"),ncol(Values_wide_K562[[n]]):1]
+}
+
+Retained_Sums_HepG2<-colSums(Values_wide_HepG2$Retained,na.rm = T)/nrow(Values_wide_HepG2$Retained)
+Skipped_Sums_HepG2<-colSums(Values_wide_HepG2$Skipped,na.rm = T)/nrow(Values_wide_HepG2$Skipped)
+Control_Sums_HepG2<-colSums(Values_wide_HepG2$Control,na.rm = T)/nrow(Values_wide_HepG2$Control)
+
+Retained_Sums_K562<-colSums(Values_wide_K562$Retained,na.rm = T)/nrow(Values_wide_K562$Retained)
+Skipped_Sums_K562<-colSums(Values_wide_K562$Skipped,na.rm = T)/nrow(Values_wide_K562$Skipped)
+Control_Sums_K562<-colSums(Values_wide_K562$Control,na.rm = T)/nrow(Values_wide_K562$Control)
+
+
+plot(Retained_Sums_K562,col="Blue",type="l",ylim=c(0,0.1),lwd=5)
+points(Skipped_Sums_K562,col="Red",type="l",lwd=5)
+points(Control_Sums_K562,col="Black",type="l",lwd=5)
+abline(v=c(50,650,750,1350))
+
+
+#Writing Files for Plotting
+Combined<-as.data.frame(rbind(cbind(1:1400,Retained_Sums_HepG2,"Retained"),
+                              cbind(1:1400,Skipped_Sums_HepG2,"Skipped"),
+                              cbind(1:1400,Control_Sums_HepG2,"Control")))
+
+colnames(Combined)<-c("Pos","Counts","Group")
+Combined$Pos<-as.numeric(Combined$Pos)
+Combined$Counts<-as.numeric(Combined$Counts)
+write.table(Combined,"Summary_Files/Pancreas_HepG2.txt",sep="\t",row.names = F,col.names = T,quote=F)
+
+Combined<-as.data.frame(rbind(cbind(1:1400,Retained_Sums_K562,"Retained"),
+                              cbind(1:1400,Skipped_Sums_K562,"Skipped"),
+                              cbind(1:1400,Control_Sums_K562,"Control")))
+
+colnames(Combined)<-c("Pos","Counts","Group")
+Combined$Pos<-as.numeric(Combined$Pos)
+Combined$Counts<-as.numeric(Combined$Counts)
+write.table(Combined,"Summary_Files/Pancreas_K562.txt",sep="\t",row.names = F,col.names = T,quote=F)
+```
+
+#Ovarian Skipped Exons
+```{r}
+SE<-read.table("rMATS/Ovarian/SE.MATS.JC.txt",header=T)
+SE<-Sum_Counts(SE)
+SE<-SE[which(SE$Total_Count_1>30 & SE$Total_Count_2>30),] #61085
+SE$Identifier<- paste0(SE$GeneID,"_",SE$chr,"_",SE$exonStart_0base,"-",SE$exonEnd,"_",SE$upstreamES,"-",SE$upstreamEE,"_",SE$downstreamES,"-",SE$downstreamEE,"_",SE$strand)
+SE_bed<-SE[c("chr","exonStart_0base","exonEnd","Identifier","Total_Count_1","strand")]
+write.table(SE_bed,"rMATS/SMNDC1_Ovarian_SE.bed",col.names=F,row.names = F,quote=F,sep="\t")
+
+#sort -k1,1 -k2,2n SMNDC1_Ovarian_SE.bed | bedtools merge -s -c 4,5 -o collapse -delim "," > SMNDC1_Ovarian_SE_merged.bed
+
+Merged<-read.table("rMATS/SMNDC1_Ovarian_SE_merged.bed")
+
+#Keeping Overlaping ExonID that have highest Inclusion in Controls
+for (i in 1:dim(Merged)[1]){
+  if (grepl(",",Merged$V5[i])){
+    nums<-which.max(as.integer(strsplit(Merged$V5[i],",")[[1]]))
+    Merged$V4[i]<-strsplit(Merged$V4[i],",")[[1]][nums]
+  }
+}
+
+SE<-SE[which(SE$Identifier %in% Merged$V4),]
+SE$Sig_Status<-ifelse(abs(SE$IncLevelDifference)>0.05 & SE$FDR<0.1 & SE$PValue<0.05,"Sig","Not_sig")
+SE$Mean_Inc_Level_1<-sapply(SE$IncLevel1,function(x){mean(as.numeric(strsplit(x,",")[[1]]),na.rm=T)})
+SE$Mean_Inc_Level_2<-sapply(SE$IncLevel2,function(x){mean(as.numeric(strsplit(x,",")[[1]]),na.rm=T)})
+
+Retained<-SE[which(SE$Sig_Status=="Sig" & SE$IncLevelDifference<0),] #444
+Skipped<-SE[which(SE$Sig_Status=="Sig" & SE$IncLevelDifference>0),] #948
+Control_Set<-SE[which(SE$Sig_Status=="Not_sig" & SE$Mean_Inc_Level_1>0.1 & SE$Mean_Inc_Level_1<0.9),] #3541
+
+#Getting the Peak file
+
+#HepG2
+rep1<-read.table("eCLIP_Peaks/ENCFF356SSO_SMNDC1_HepG2_01.bed")
+rep2<-read.table("eCLIP_Peaks//ENCFF588UIR_SMNDC1_HepG2_02.bed")
+peaks<-rbind(rep1,rep2)
+peaks<-peaks[which(peaks$V7>1 & peaks$V8>(-log10(0.001))),1:8]
+colnames(peaks)<-c("Chr","Start","End","Exp","Score","Strand","Enrichment","Pval")
+peaks_gr<-GenomicRanges::makeGRangesFromDataFrame(peaks,keep.extra.columns = T)
+HepG2_peaks_reduced<-GenomicRanges::reduce(peaks_gr,min.gapwidth=10)
+
+#K562
+rep1<-read.table("eCLIP_Peaks/ENCFF927UFK_SMNDC1_K562_01.bed")
+rep2<-read.table("eCLIP_Peaks/ENCFF723GHJ_SMNDC1_K562_02.bed")
+peaks<-rbind(rep1,rep2)
+peaks<-peaks[which(peaks$V7>1 & peaks$V8>(-log10(0.001))),1:8]
+colnames(peaks)<-c("Chr","Start","End","Exp","Score","Strand","Enrichment","Pval")
+peaks_gr<-GenomicRanges::makeGRangesFromDataFrame(peaks,keep.extra.columns = T)
+K562_peaks_reduced<-GenomicRanges::reduce(peaks_gr,min.gapwidth=10)
+
+#
+Counts<-list("Retained"=Retained,"Skipped"=Skipped,"Control"=Control_Set)
+Counts<-lapply(Counts,Get_Bins)
+Counts<-lapply(Counts,function(x){x$Identifier<-rownames(x);return(x)})
+Counts_l<-lapply(Counts,function(x){y<-reshape2::melt(x,id.vars="Identifier");return(y)})
+Counts_l<-lapply(Counts_l,function(x){y<-x[which(x$value != 0),]})
+
+#Getting Overlaps
+Make_Ranges<-function(df){
+  df$Chr<-sapply(df$value,function(x){strsplit(x,":")[[1]][1]})
+  df$Start<-sapply(df$value,function(x){strsplit(x,":|-|_")[[1]][2]})
+  df$End<-sapply(df$value,function(x){strsplit(x,":|-|_")[[1]][3]})
+  df$strand<-sapply(df$value,function(x){strsplit(x,"_")[[1]][2]})
+  df_gr<-GenomicRanges::makeGRangesFromDataFrame(df,strand.field="strand",keep.extra.columns=T)
+  return(df_gr)
+}
+
+Counts_gr<-lapply(Counts_l,Make_Ranges)
+
+for (n in names(Counts_gr)){
+  ov_HepG2<-GenomicRanges::countOverlaps(Counts_gr[[n]],HepG2_peaks_reduced)
+  ov_K562<-GenomicRanges::countOverlaps(Counts_gr[[n]],K562_peaks_reduced)
+  GenomicRanges::values(Counts_gr[[n]])<-cbind(GenomicRanges::values(Counts_gr[[n]]),ov_HepG2,ov_K562)
+}
+
+Values<-lapply(Counts_gr,function(x){y<-as.data.frame(GenomicRanges::values(x));return(y)})
+
+##### For Overlaps
+Values_wide_HepG2<-lapply(Values,function(x){y<-reshape(x[c("Identifier","variable","ov_HepG2")],idvar = "Identifier", timevar = "variable", direction = "wide");return(y)})
+Values_wide_K562<-lapply(Values,function(x){y<-reshape(x[c("Identifier","variable","ov_K562")],idvar = "Identifier", timevar = "variable", direction = "wide");return(y)})
+
+
+for (n in names(Values_wide_HepG2)){
+  rownames(Values_wide_HepG2[[n]])<-Values_wide_HepG2[[n]][,1]
+  Values_wide_HepG2[[n]]<-Values_wide_HepG2[[n]][,-1]
+  strand<-sapply(rownames(Values_wide_HepG2[[n]]),function(x){strsplit(x,"_")[[1]][6]})
+  Values_wide_HepG2[[n]][which(strand=="-"),]<-Values_wide_HepG2[[n]][which(strand=="-"),ncol(Values_wide_HepG2[[n]]):1]
+}
+
+for (n in names(Values_wide_K562)){
+  rownames(Values_wide_K562[[n]])<-Values_wide_K562[[n]][,1]
+  Values_wide_K562[[n]]<-Values_wide_K562[[n]][,-1]
+  strand<-sapply(rownames(Values_wide_K562[[n]]),function(x){strsplit(x,"_")[[1]][6]})
+  Values_wide_K562[[n]][which(strand=="-"),]<-Values_wide_K562[[n]][which(strand=="-"),ncol(Values_wide_K562[[n]]):1]
+}
+
+Retained_Sums_HepG2<-colSums(Values_wide_HepG2$Retained,na.rm = T)/nrow(Values_wide_HepG2$Retained)
+Skipped_Sums_HepG2<-colSums(Values_wide_HepG2$Skipped,na.rm = T)/nrow(Values_wide_HepG2$Skipped)
+Control_Sums_HepG2<-colSums(Values_wide_HepG2$Control,na.rm = T)/nrow(Values_wide_HepG2$Control)
+
+Retained_Sums_K562<-colSums(Values_wide_K562$Retained,na.rm = T)/nrow(Values_wide_K562$Retained)
+Skipped_Sums_K562<-colSums(Values_wide_K562$Skipped,na.rm = T)/nrow(Values_wide_K562$Skipped)
+Control_Sums_K562<-colSums(Values_wide_K562$Control,na.rm = T)/nrow(Values_wide_K562$Control)
+
+
+plot(Retained_Sums_K562,col="Blue",type="l",ylim=c(0,0.1),lwd=5)
+points(Skipped_Sums_K562,col="Red",type="l",lwd=5)
+points(Control_Sums_K562,col="Black",type="l",lwd=5)
+abline(v=c(50,650,750,1350))
+
+
+#Writing Files for Plotting
+Combined<-as.data.frame(rbind(cbind(1:1400,Retained_Sums_HepG2,"Retained"),
+                              cbind(1:1400,Skipped_Sums_HepG2,"Skipped"),
+                              cbind(1:1400,Control_Sums_HepG2,"Control")))
+
+colnames(Combined)<-c("Pos","Counts","Group")
+Combined$Pos<-as.numeric(Combined$Pos)
+Combined$Counts<-as.numeric(Combined$Counts)
+write.table(Combined,"Summary_Files/Ovarian_HepG2.txt",sep="\t",row.names = F,col.names = T,quote=F)
+
+Combined<-as.data.frame(rbind(cbind(1:1400,Retained_Sums_K562,"Retained"),
+                              cbind(1:1400,Skipped_Sums_K562,"Skipped"),
+                              cbind(1:1400,Control_Sums_K562,"Control")))
+
+colnames(Combined)<-c("Pos","Counts","Group")
+Combined$Pos<-as.numeric(Combined$Pos)
+Combined$Counts<-as.numeric(Combined$Counts)
+write.table(Combined,"Summary_Files/Ovarian_K562.txt",sep="\t",row.names = F,col.names = T,quote=F)
+```

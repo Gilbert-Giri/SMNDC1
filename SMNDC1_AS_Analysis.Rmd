@@ -1,0 +1,97 @@
+---
+title: "SMNDC1_rMATS_Analysis"
+output: html_document
+date: "2023-07-12"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Splicing Analysis
+```{r}
+Sum_JC<-function(x){sum(as.numeric(strsplit(x,split = ",")[[1]]))}
+Sum_Counts<-function(df){
+  df$IJC_Sum_1<-sapply(df$IJC_SAMPLE_1,Sum_JC)
+  df$IJC_Sum_2<-sapply(df$IJC_SAMPLE_2,Sum_JC)
+  df$SJC_Sum_1<-sapply(df$SJC_SAMPLE_1,Sum_JC)
+  df$SJC_Sum_2<-sapply(df$SJC_SAMPLE_2,Sum_JC)
+  df$Total_Count_1<-df$IJC_Sum_1+df$SJC_Sum_1
+  df$Total_Count_2<-df$IJC_Sum_2+df$SJC_Sum_2
+  return(df)
+}
+
+#SE Identifier
+SE_Make_Identifier<-function(x){
+  x$Identifier<-paste("SE","_",x$GeneID,"_",x$geneSymbol,"_",x$chr,":",x$exonStart_0base,"-",x$exonEnd,"_",x$upstreamES,"-",
+                         x$upstreamEE,"_",x$downstreamES,"-",x$downstreamEE,"_",x$strand,sep="")
+  return(x)
+}
+
+#RI Identifier
+RI_Make_Identifier<-function(x){
+  x$Identifier<-paste("RI","_",x$GeneID,"_",x$geneSymbol,"_",x$chr,":",x$riExonStart_0base,"-",x$riExonEnd,"_",x$upstreamES,"-",
+                         x$upstreamEE,"_",x$downstreamES,"-",x$downstreamEE,"_",x$strand,sep="")
+  return(x)
+}
+
+#MXE Identifier
+MXE_Make_Identifier<-function(x){
+  x$Identifier<-paste("MXE","_",x$GeneID,"_",x$geneSymbol,"_",x$chr,":",x$X1stExonStart_0base,"-",x$X1stExonEnd,"_",x$X2ndExonStart_0base,"-",x$X2ndExonEnd,"_",x$upstreamES,"-",
+                         x$upstreamEE,"_",x$downstreamES,"-",x$downstreamEE,"_",x$strand,sep="")
+  return(x)
+}
+
+#A3SS Identifier
+A3SS_Make_Identifier<-function(x){
+  x$Identifier<-paste("A3SS","_",x$GeneID,"_",x$geneSymbol,"_",x$chr,":",x$longExonStart_0base,"-",x$longExonEnd,"_",x$shortES,"-",x$shortEE,"_",
+                      x$flankingES,"_",x$flankingEE,"_",x$strand,sep="")
+  return(x)
+}
+
+#A5SS Identifier
+A5SS_Make_Identifier<-function(x){
+  x$Identifier<-paste("A5SS","_",x$GeneID,"_",x$geneSymbol,"_",x$chr,":",x$longExonStart_0base,"-",x$longExonEnd,"_",x$shortES,"-",x$shortEE,"_",
+                      x$flankingES,"_",x$flankingEE,"_",x$strand,sep="")
+  return(x)
+}
+
+```
+
+#Output all events
+```{r}
+Events<-c("SE","RI","MXE","A3SS","A5SS")
+
+Pancreatic_Events<-list()
+Ovarian_Events<-list()
+
+for (e in Events){
+  Pancreatic_Events[[e]]<-read.table(paste0("rMATS/Pancreas/",e,".MATS.JCEC.txt"),header=T)
+  Ovarian_Events[[e]]<-read.table(paste0("rMATS/Ovarian/",e,".MATS.JCEC.txt"),header=T)
+}
+
+Pancreatic_Events<-lapply(Pancreatic_Events,Sum_Counts)
+Ovarian_Events<-lapply(Ovarian_Events,Sum_Counts)
+
+#Assigning Identifiers
+Pancreatic_Events$SE<-SE_Make_Identifier(Pancreatic_Events$SE)
+Pancreatic_Events$RI<-RI_Make_Identifier(Pancreatic_Events$RI)
+Pancreatic_Events$MXE<-MXE_Make_Identifier(Pancreatic_Events$MXE)
+Pancreatic_Events$A3SS<-A3SS_Make_Identifier(Pancreatic_Events$A3SS)
+Pancreatic_Events$A5SS<-A5SS_Make_Identifier(Pancreatic_Events$A5SS)
+
+Ovarian_Events$SE<-SE_Make_Identifier(Ovarian_Events$SE)
+Ovarian_Events$RI<-RI_Make_Identifier(Ovarian_Events$RI)
+Ovarian_Events$MXE<-MXE_Make_Identifier(Ovarian_Events$MXE)
+Ovarian_Events$A3SS<-A3SS_Make_Identifier(Ovarian_Events$A3SS)
+Ovarian_Events$A5SS<-A5SS_Make_Identifier(Ovarian_Events$A5SS)
+
+#All Events
+Pancreatic_Events_df<-dplyr::bind_rows(Pancreatic_Events, .id = "column_label")
+Ovarian_Events_df<-dplyr::bind_rows(Ovarian_Events, .id = "column_label")
+
+
+write.table(Pancreatic_Events_df,"Summary_Files/All_Events_Pan.txt",sep="\t",quote=F,row.names = F,col.names = T)
+write.table(Ovarian_Events_df,"Summary_Files/All_Events_Ov.txt",sep="\t",quote=F,row.names = F,col.names = T)
+
+```

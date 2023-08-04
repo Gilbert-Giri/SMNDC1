@@ -1,0 +1,842 @@
+---
+title: "Figures"
+output: html_document
+date: "2023-08-04"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(ggrepel)
+library(clusterProfiler)
+library(ggVennDiagram)
+```
+
+
+#Figure 2A - Volcano Plot in PDAC
+```{r}
+res_df<-read.table("Summary_Files/sh_vs_ctrl_Pan.txt",header=T)
+
+##Volcano Plot
+cols <- c("up" = "#FE0000", "down" = "#079BF5", "ns" = "grey") 
+sizes <- c("up" = 0.75, "down" = 0.75, "ns" = 0.25) 
+alphas <- c("up" = 1, "down" = 1, "ns" = 0.5)
+
+sig_up_genes <- res_df %>%
+  dplyr::filter(Genes %in% c("ENSG00000119953"))
+
+volcano<-res_df %>%
+  ggplot(aes(x = log2FoldChange,
+             y = -log10(padj),
+             fill = gene_type,
+             color=gene_type,
+             size = gene_type,
+             alpha =gene_type)) + 
+  geom_point(shape = 21) +
+  geom_hline(yintercept = -log10(0.05),
+             linetype = "dashed") + 
+  geom_vline(xintercept = c(log2(0.5), log2(2)),
+             linetype = "dashed")+
+  scale_fill_manual(values = cols) + # Modify point colour
+  scale_color_manual(values = cols) + # Modify point colour
+  scale_size_manual(values = sizes) + # Modify point size
+  scale_alpha_manual(values = alphas) + # Modify point transparency
+  scale_x_continuous(breaks = c(-4,-2,-0,2,4),       
+                     limits = c(-5.5, 5.5))+
+  theme_classic()+
+  geom_text_repel(data = sig_up_genes, # Add labels last to appear as the top layer  
+                  aes(label = Gene_Sym),
+                  size=2,
+                  nudge_y = 1,
+                  nudge_x = -2,
+                  color="black")+
+  geom_point(data = sig_up_genes,shape = 21,alpha=1, fill = "#D5732E",colour = "black")+
+  theme(legend.position = "none",
+        axis.text=element_text(size=6, color="black"), 
+        axis.title = element_text(size=8, color="black"),
+        panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank(),
+        legend.background = element_blank())
+volcano
+ggsave("../SMNDC1-final/Figures/2A_Pan_DESEQ_Volcano.pdf",width=1.5,height=1.5)
+```
+
+#Figure 2B - Volcano Plot in Ov
+```{r}
+rm(list=ls())
+res_df<-read.table("Summary_Files/sh_vs_ctrl_Ov.txt",header=T)
+
+##Volcano Plot
+cols <- c("up" = "#FE0000", "down" = "#079BF5", "ns" = "grey") 
+sizes <- c("up" = 0.75, "down" = 0.75, "ns" = 0.25) 
+alphas <- c("up" = 1, "down" = 1, "ns" = 0.5)
+
+sig_up_genes <- res_df %>%
+  dplyr::filter(Genes %in% c("ENSG00000119953"))
+
+volcano<-res_df %>%
+  ggplot(aes(x = log2FoldChange,
+             y = -log10(padj),
+             fill = gene_type,
+             color=gene_type,
+             size = gene_type,
+             alpha =gene_type)) + 
+  geom_point(shape = 21) +
+  geom_hline(yintercept = -log10(0.05),
+             linetype = "dashed") + 
+  geom_vline(xintercept = c(log2(0.5), log2(2)),
+             linetype = "dashed")+
+  scale_fill_manual(values = cols) + # Modify point colour
+  scale_color_manual(values = cols) + # Modify point colour
+  scale_size_manual(values = sizes) + # Modify point size
+  scale_alpha_manual(values = alphas) + # Modify point transparency
+  scale_x_continuous(breaks = c(-4,-2,-0,2,4),       
+                     limits = c(-5.5, 5.5))+
+  theme_classic()+
+  geom_text_repel(data = sig_up_genes, # Add labels last to appear as the top layer  
+                  aes(label = Gene_Sym),
+                  size=2,
+                  nudge_y = 1,
+                  nudge_x = -2,
+                  color="black")+
+  geom_point(data = sig_up_genes,shape = 21,alpha=1, fill = "#D5732E",colour = "black")+
+  theme(legend.position = "none",
+        axis.text=element_text(size=6, color="black"), 
+        axis.title = element_text(size=8, color="black"),
+        panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank(),
+        legend.background = element_blank())
+volcano
+ggsave("../SMNDC1-final/Figures/2B_Ov_DESEQ_Volcano.pdf",width=1.5,height=1.5)
+```
+
+#Fig 2C-Overlaping GE between PDAC & Ov
+```{r}
+rm(list=ls())
+Pan<-read.table("Summary_Files/sh_vs_ctrl_Pan.txt",header=T)
+Ov<-read.table("Summary_Files/sh_vs_ctrl_Ov.txt",header=T)
+
+#Making Gene List
+Pan_Up<-Pan$Genes[which(Pan$gene_type=="up")]
+Pan_Down<-Pan$Genes[which(Pan$gene_type=="down")]
+
+Ov_Up<-Ov$Genes[which(Ov$gene_type=="up")]
+Ov_Down<-Ov$Genes[which(Ov$gene_type=="down")]
+
+#Overlaping Venn Diagram
+Up_list<-list("PDAC"=Pan_Up,"HGSOC"=Ov_Up)
+Down_list<-list("PDAC"=Pan_Down,"HGSOC"=Ov_Down)
+
+ggVennDiagram(Up_list,color="black",label_alpha = 0,label_size = 2,edge_size = 0.5,set_size=2,label = "count")+
+  scale_fill_gradient(low="white",high = "#FE0000")+
+  scale_color_manual(values = c("PDAC" = "black","HGSOC" ="black"))+
+  theme(legend.position = "none")+
+  theme(panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank(),
+        legend.background = element_blank(),
+        axis.title = element_text(size=1, color="black"))
+ggsave("Figures/2C_Upregulated_Overlaps.pdf",width=1.5,height=0.75)
+  
+ggVennDiagram(Down_list,color="black",label_alpha = 0,label_size = 2,edge_size = 0.5,set_size=2,label = "count")+
+  scale_fill_gradient(low="white",high = "#079BF5")+
+  scale_color_manual(values = c("PDAC" = "black","HGSOC" ="black"))+
+  theme(legend.position = "none")+
+  theme(panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank(),
+        legend.background = element_blank(),
+        axis.title = element_text(size=1, color="black"))
+ggsave("Figures/2C_DownRegulated_Overlaps.pdf",width=1.5,height=0.75)
+
+```
+
+#Fig 2D-GSEA-Pan
+```{r}
+rm(list=ls())
+GSEA_Pos<-read.table("Summary_Files/Pancreatic_DESEQ.GseaPreranked.1691179573388/gsea_report_for_na_pos_1691179573388.tsv",sep="\t",header=T)
+GSEA_Neg<-read.table("Summary_Files/Pancreatic_DESEQ.GseaPreranked.1691179573388/gsea_report_for_na_neg_1691179573388.tsv",sep="\t",header=T)
+df<-rbind(GSEA_Pos,GSEA_Neg)
+df$NAME=gsub("HALLMARK_","",df$NAME)
+df$NAME[which(df$NAME=="EPITHELIAL_MESENCHYMAL_TRANSITION")]<-"EMT"
+df$color<-"grey"
+df$color[which(df$FDR.q.val<0.05 & df$NES>0)]<-"#FE0000"
+df$color[which(df$FDR.q.val<0.05 & df$NES<0)]<-"#079BF5"
+
+sig_genes <- df %>%
+  dplyr::filter(NAME %in% c("G2M_CHECKPOINT","EMT","KRAS_SIGNALING_DN"))
+sig_genes$NAME=gsub("_","\n",sig_genes$NAME)
+
+ggplot(df, aes(NES, -log10(FDR.q.val))) + 
+  geom_point(aes(col=color)) + 
+  scale_color_identity()+
+  coord_cartesian(xlim = c(-7, 7)) +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed",color="gray") +
+  geom_vline(xintercept = c(-1, 1), linetype = "dashed",color="gray") +
+  geom_point(data = sig_genes,shape = 21,alpha=1,colour = "black")+
+  geom_text_repel(data = sig_genes[which(sig_genes$NES>0),], 
+                  aes(label = NAME),
+                  force = 1,
+                  size=2,
+                  nudge_y =0,
+                  nudge_x = 5)+
+  geom_text_repel(data = sig_genes[which(sig_genes$NES<0),], 
+                  aes(label = NAME),
+                  force = 1,
+                  size=1.5,
+                  nudge_y = 0.5,
+                  nudge_x = -2)+
+  labs(x="NES", y="-log10 FDR") +
+  theme_classic() +
+  theme(axis.text=element_text(size=6, color="black"), 
+        axis.title = element_text(size=8, color="black"),
+        panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank())
+ggsave("Figures/2D_GSEA_Pan.pdf",width=1.5,height=1.5)
+```
+
+#Fig 2E-GSEA-Pan
+```{r}
+rm(list=ls())
+GSEA_Pos<-read.table("Summary_Files/Ovarian_DESEQ.GseaPreranked.1691179517599/gsea_report_for_na_pos_1691179517599.tsv",sep="\t",header=T)
+GSEA_Neg<-read.table("Summary_Files/Ovarian_DESEQ.GseaPreranked.1691179517599/gsea_report_for_na_neg_1691179517599.tsv",sep="\t",header=T)
+df<-rbind(GSEA_Pos,GSEA_Neg)
+df$NAME=gsub("HALLMARK_","",df$NAME)
+df$NAME[which(df$NAME=="EPITHELIAL_MESENCHYMAL_TRANSITION")]<-"EMT"
+df$color<-"grey"
+df$color[which(df$FDR.q.val<0.05 & df$NES>0)]<-"#FE0000"
+df$color[which(df$FDR.q.val<0.05 & df$NES<0)]<-"#079BF5"
+
+sig_genes <- df %>%
+  dplyr::filter(NAME %in% c("EMT","TGF_BETA_SIGNALING","KRAS_SIGNALING_UP"))
+sig_genes$NAME=gsub("_","\n",sig_genes$NAME)
+
+ggplot(df, aes(NES, -log10(FDR.q.val))) + 
+  geom_point(aes(col=color)) + 
+  scale_color_identity()+
+  coord_cartesian(xlim = c(-2, 10)) +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed",color="gray") +
+  geom_vline(xintercept = c(-1, 1), linetype = "dashed",color="gray") +
+  geom_point(data = sig_genes,shape = 21,alpha=1,colour = "black")+
+  geom_text_repel(data = sig_genes[which(sig_genes$NES>0),], 
+                  aes(label = NAME),
+                  force = 1,
+                  size=2,
+                  nudge_y =0,
+                  nudge_x = 5)+
+  geom_text_repel(data = sig_genes[which(sig_genes$NES<0),], 
+                  aes(label = NAME),
+                  force = 1,
+                  size=2,
+                  nudge_y = 0.5,
+                  nudge_x = -2)+
+  labs(x="NES", y="-log10 FDR") +
+  theme_classic() +
+  theme(axis.text=element_text(size=6, color="black"), 
+        axis.title = element_text(size=8, color="black"),
+        panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank())
+ggsave("Figures/2E_GSEA_Ov.pdf",width=1.5,height=1.5)
+```
+
+#Fig 2F- GSEA Plot of selected pathway
+
+#Fig 2G- Splicing Distributions
+```{r}
+rm(list=ls())
+Pancreatic_Events<-read.table("Summary_Files/All_Events_Pan.txt",header=T)
+Ovarian_Events<-read.table("Summary_Files/All_Events_Ov.txt",header=T)
+
+#Getting the Significant Events
+Pancreatic_Events_Sig<-Pancreatic_Events[which(Pancreatic_Events$Total_Count_1>=30 & Pancreatic_Events$Total_Count_2>=30 & 
+                                                 Pancreatic_Events$PValue<0.05 & Pancreatic_Events$FDR<0.05),]
+  
+Ovarian_Events_Sig<-Ovarian_Events[which(Ovarian_Events$Total_Count_1>=30 & Ovarian_Events$Total_Count_2>=30 &
+                                           Ovarian_Events$PValue<0.05 & Ovarian_Events$FDR<0.05),]
+
+Events_in_Both<-intersect(Pancreatic_Events_Sig$Identifier,Ovarian_Events_Sig$Identifier)
+
+#Getting Values
+Common_Events<-merge(Pancreatic_Events_Sig[c("Identifier","IncLevelDifference")],Ovarian_Events_Sig[c("Identifier","IncLevelDifference")],by="Identifier")
+colnames(Common_Events)<-c("Identifier","Pan","Ov")
+Common_Events$Event_Type<-sapply(Common_Events$Identifier,function(x){strsplit(x,"_")[[1]][1]})
+Common_Events$Event_Type<-factor(Common_Events$Event_Type,levels=c("SE","A5SS","A3SS","MXE","RI"))
+
+ggplot(Common_Events, aes(Pan))+
+  geom_histogram(fill="#BE733E",color="black",breaks=seq(-0.5,0.5,0.05),size=0.1)+
+  geom_vline(xintercept = 0,linetype="dashed",color="black",size=0.1)+
+  facet_wrap(~Event_Type, ncol = 5)+
+  theme_classic()+
+  scale_y_continuous(breaks = c(0,50,100),       
+                     limits = c(0,130))+
+  scale_x_continuous(breaks = c(-0.3,0,0.3),       
+                     limits = c(-0.5,0.5))+
+  labs(x="",y="")+
+  theme(legend.position = "none",
+        strip.text.x = element_blank(),
+        strip.background = element_blank())+
+  theme(axis.text.x=element_text(size=2.5, color="black"), 
+        axis.text.y=element_blank(),
+        axis.title = element_blank(),
+        panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank(),
+        axis.ticks.y=element_blank(),
+        axis.line.y = element_blank())
+ggsave("Figures/2G_Del_PSI_Dist_Pan.pdf",width=2.1,height=0.75)
+
+ggplot(Common_Events, aes(Ov))+
+  geom_histogram(fill="#8AA54E",color="black",breaks=seq(-0.5,0.5,0.05),size=0.1)+
+  geom_vline(xintercept = 0,linetype="dashed",color="black",size=0.1)+
+  facet_wrap(~Event_Type, ncol = 5)+
+  theme_classic()+
+  scale_y_continuous(breaks = c(0,50,100),       
+                     limits = c(0,130))+
+  scale_x_continuous(breaks = c(-0.3,0,0.3),       
+                     limits = c(-0.5,0.5))+
+  labs(x="",y="")+
+  theme(legend.position = "none",
+        strip.text.x = element_blank(),
+        strip.background = element_blank())+
+  theme(axis.text.x=element_text(size=2.5, color="black"), 
+        axis.text.y=element_blank(),
+        axis.title = element_blank(),
+        panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank(),
+        axis.ticks.y=element_blank(),
+        axis.line.y = element_blank())
+ggsave("Figures/2G_Del_PSI_Dist_Ov.pdf",width=2.1,height=0.75)
+
+```
+
+#Fig 2G- Splicing Distributions-Bar Plot
+```{r}
+rm(list=ls())
+Pancreatic_Events<-read.table("Summary_Files/All_Events_Pan.txt",header=T)
+Ovarian_Events<-read.table("Summary_Files/All_Events_Ov.txt",header=T)
+
+#Getting the Significant Events
+Pancreatic_Events_Sig<-Pancreatic_Events[which(Pancreatic_Events$Total_Count_1>=30 & Pancreatic_Events$Total_Count_2>=30 & 
+                                                 Pancreatic_Events$PValue<0.05 & Pancreatic_Events$FDR<0.05),]
+  
+Ovarian_Events_Sig<-Ovarian_Events[which(Ovarian_Events$Total_Count_1>=30 & Ovarian_Events$Total_Count_2>=30 &
+                                           Ovarian_Events$PValue<0.05 & Ovarian_Events$FDR<0.05),]
+
+#Making a BarPplot with the Proportion of Significant Events in both cell line
+Event_Count_Pan<-data.frame(table(Pancreatic_Events_Sig$column_label),"PDAC")
+Event_Count_Ov<-data.frame(table(Ovarian_Events_Sig$column_label),"HGSOC")
+colnames(Event_Count_Pan)<-c("Event","Count","Sample")
+colnames(Event_Count_Ov)<-c("Event","Count","Sample")
+Event_Counts<-rbind(Event_Count_Pan,Event_Count_Ov)
+Event_Counts$Event<-as.character(Event_Counts$Event)
+Event_Counts$Event[which(Event_Counts$Event=="SE")]<-"CE"
+Event_Counts$Event<-factor(Event_Counts$Event,levels=c("CE","A5SS","A3SS","MXE","RI"))
+Event_Counts$Sample<-factor(Event_Counts$Sample,levels=c("PDAC","HGSOC"))
+
+library(ggplot2)
+ggplot(Event_Counts,aes(x=Event,y=Count,fill=Sample))+
+  geom_bar(stat="identity", position="dodge")+
+  labs(x="",y="# of Events")+
+  theme_classic()+
+  scale_fill_manual(values = c(PDAC="#8AA54E",HGSOC="#BE733E"))+
+  #coord_flip()+
+  theme(legend.position =c(0.85, .75),
+        legend.text=element_text(size=5),
+        legend.title=element_text(size=6),
+        axis.text=element_text(size=6, color="black"), 
+        axis.title = element_text(size=8, color="black"),
+        panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank(),
+        legend.background = element_blank())+
+  guides(fill=guide_legend(title="Cancer Type"))+
+  theme(legend.key.size = unit(0.3, 'cm'))
+
+ggsave("Figures/2G_Common_Events_Distribution.pdf",width=3,height=1.5)
+```
+
+#Figure 2H- PSI Scatter Plot
+```{r}
+rm(list=ls())
+Pancreatic_Events<-read.table("Summary_Files/All_Events_Pan.txt",header=T)
+Ovarian_Events<-read.table("Summary_Files/All_Events_Ov.txt",header=T)
+
+#Getting the Significant Events
+Pancreatic_Events_Sig<-Pancreatic_Events[which(Pancreatic_Events$Total_Count_1>=30 & Pancreatic_Events$Total_Count_2>=30 & 
+                                                 Pancreatic_Events$PValue<0.05 & Pancreatic_Events$FDR<0.05),]
+  
+Ovarian_Events_Sig<-Ovarian_Events[which(Ovarian_Events$Total_Count_1>=30 & Ovarian_Events$Total_Count_2>=30 &
+                                           Ovarian_Events$PValue<0.05 & Ovarian_Events$FDR<0.05),]
+
+Events_in_Both<-intersect(Pancreatic_Events_Sig$Identifier,Ovarian_Events_Sig$Identifier)
+
+#Getting Values
+Common_Events<-merge(Pancreatic_Events_Sig[c("Identifier","IncLevelDifference")],Ovarian_Events_Sig[c("Identifier","IncLevelDifference")],by="Identifier")
+colnames(Common_Events)<-c("Identifier","Pan","Ov")
+Common_Events$Color<-"#C0BFBF"
+Common_Events$Color[which(Common_Events$Pan>0 & Common_Events$Ov>0)]<-"#8A181A"
+Common_Events$Color[which(Common_Events$Pan<0 & Common_Events$Ov<0)]<-"#2A2D7C"
+
+sig_up_genes <- Common_Events %>%
+  dplyr::filter(Identifier %in% c("SE_ENSG00000102882_MAPK3_chr16:30118098-30118163_30117669-30117784_30118348-30118538_-"))
+
+ggplot(Common_Events,aes(x = Pan,y = Ov,color=Color,fill = Color))+
+  geom_point(shape = 21,alpha=0.5)+
+  scale_fill_identity()+
+  scale_colour_identity()+
+  labs(x="dPSI PDAC (Ctrl-KD)",y="dPSI OvCa (Ctrl-KD)")+
+  geom_point(data = sig_up_genes,shape = 21,alpha=1, fill = "#D5732E",colour = "black")+
+  geom_text_repel(data = sig_up_genes,aes(label = "MapK3\n(ERK1)"),force = 2,nudge_x = -0.2,nudge_y = 0.1,colour = "black",size=2)+
+  theme_classic()+
+  theme(axis.text=element_text(size=6, color="black"), 
+        axis.title = element_text(size=8, color="black"),
+        panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank(),
+        legend.background = element_blank())+
+  theme(legend.key.size = unit(1, 'cm'))
+ggsave("Figures/2H_Common_Events_PSI.pdf",width=1.5,height=1.5)
+```
+
+#Figure 2I - Overlap Between AS and GE Genes (PDAC)
+```{r}
+rm(list=ls())
+Pancreatic_Events<-read.table("Summary_Files//All_Events_Pan.txt",header=T)
+Pan_GE<-read.table("Summary_Files/sh_vs_ctrl_Pan.txt",header=T)
+
+#Getting all the Sig Events
+Pancreatic_Events<-Pancreatic_Events[which(Pancreatic_Events$Total_Count_1>=30 & Pancreatic_Events$Total_Count_2>=30 & 
+                                                 Pancreatic_Events$PValue<0.05 & Pancreatic_Events$FDR<0.05),]
+
+Pan_GE<-Pan_GE[which(Pan_GE$gene_type != "ns"),]
+
+#Making a list of DE and AS Genes
+Pan<-list("DE"=Pan_GE$Genes,"AS"=unique(Pancreatic_Events$GeneID))
+ggVennDiagram(Pan,color="black",label_alpha = 0,label_size = 2,edge_size = 0.5,set_size=2,label = "count")+
+  scale_fill_gradient(low="white",high = "#8AA54E")+
+  scale_color_manual(values = c("PDAC" = "black","HGSOC" ="black"))+
+  theme(legend.position = "none")+
+  theme(panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank(),
+        legend.background = element_blank(),
+        axis.title = element_text(size=1, color="black"))
+ggsave("Figures/2I_AS_GE_Overlap_Pan.pdf",width=1.5,height=0.75)
+
+```
+
+#Figure 2J - Overlap Between AS and GE Genes (OV)
+```{r}
+rm(list=ls())
+Ovarian_Events<-read.table("Summary_Files/All_Events_Ov.txt",header=T)
+Ov_GE<-read.table("Summary_Files/sh_vs_ctrl_Ov.txt",header=T)
+
+#Getting all the Sig Events
+Ovarian_Events<-Ovarian_Events[which(Ovarian_Events$Total_Count_1>=30 & Ovarian_Events$Total_Count_2>=30 &
+                                           Ovarian_Events$PValue<0.05 & Ovarian_Events$FDR<0.05),]
+Ov_GE<-Ov_GE[which(Ov_GE$gene_type != "ns"),]
+
+
+#Making a list of DE and AS Genes
+Ov<-list("DE"=Ov_GE$Genes,"AS"=unique(Ovarian_Events$GeneID))
+
+ggVennDiagram(Ov,color="black",label_alpha = 0,label_size = 2,edge_size = 0.5,set_size=2,label = "count")+
+  scale_fill_gradient(low="white",high = "#D5732E")+
+  scale_color_manual(values = c("PDAC" = "black","HGSOC" ="black"))+
+  theme(legend.position = "none")+
+  theme(panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank(),
+        legend.background = element_blank(),
+        axis.title = element_text(size=1, color="black"))
+ggsave("Figures/2J_AS_GE_Overlap_Ov.pdf",width=1.5,height=0.75)
+```
+
+#Figure 2K - Overlap Between AS Skipped Exons Events
+```{r}
+rm(list=ls())
+Pancreatic_Events<-read.table("Summary_Files/All_Events_Pan.txt",header=T)
+Ovarian_Events<-read.table("Summary_Files/All_Events_Ov.txt",header=T)
+
+#Getting the Significant Events
+Pancreatic_Events<-Pancreatic_Events[which(Pancreatic_Events$Total_Count_1>=30 & Pancreatic_Events$Total_Count_2>=30 & 
+                                                 Pancreatic_Events$PValue<0.05 & Pancreatic_Events$FDR<0.05),]
+  
+Ovarian_Events<-Ovarian_Events[which(Ovarian_Events$Total_Count_1>=30 & Ovarian_Events$Total_Count_2>=30 &
+                                           Ovarian_Events$PValue<0.05 & Ovarian_Events$FDR<0.05),]
+
+#Making a list of SE Genes
+CE<-list("PDAC"=Pancreatic_Events$Identifier[which(Pancreatic_Events$column_label=="SE")],"HGSOC"=Ovarian_Events$Identifier[which(Ovarian_Events$column_label=="SE")])
+
+ggVennDiagram(CE,color="black",label_alpha = 0,label_size = 2,edge_size = 0.5,set_size=2,label = "count")+
+  scale_fill_gradient(low="white",high = "Gray")+
+  scale_color_manual(values = c("PDAC" = "#8AA54E","HGSOC" ="#D5732E"))+
+  theme(legend.position = "none")+
+  theme(panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank(),
+        legend.background = element_blank(),
+        axis.title = element_text(size=1, color="black"))
+ggsave("Figures/2K_CE_Overlap.pdf",width=1.5,height=0.75)
+```
+
+#Figure 2L - Overlap Between AS Retained Introns Events
+```{r}
+rm(list=ls())
+Pancreatic_Events<-read.table("Summary_Files/All_Events_Pan.txt",header=T)
+Ovarian_Events<-read.table("Summary_Files/All_Events_Ov.txt",header=T)
+
+#Getting the Significant Events
+Pancreatic_Events<-Pancreatic_Events[which(Pancreatic_Events$Total_Count_1>=30 & Pancreatic_Events$Total_Count_2>=30 & 
+                                                 Pancreatic_Events$PValue<0.05 & Pancreatic_Events$FDR<0.05),]
+  
+Ovarian_Events<-Ovarian_Events[which(Ovarian_Events$Total_Count_1>=30 & Ovarian_Events$Total_Count_2>=30 &
+                                           Ovarian_Events$PValue<0.05 & Ovarian_Events$FDR<0.05),]
+
+#Making a list of SE Genes
+RI<-list("PDAC"=Pancreatic_Events$Identifier[which(Pancreatic_Events$column_label=="RI")],"HGSOC"=Ovarian_Events$Identifier[which(Ovarian_Events$column_label=="RI")])
+
+ggVennDiagram(RI,color="black",label_alpha = 0,label_size = 2,edge_size = 0.5,set_size=2,label = "count")+
+  scale_fill_gradient(low="white",high = "Gray")+
+  scale_color_manual(values = c("PDAC" = "#8AA54E","HGSOC" ="#D5732E"))+
+  theme(legend.position = "none")+
+  theme(panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank(),
+        legend.background = element_blank(),
+        axis.title = element_text(size=1, color="black"))
+
+ggsave("Figures/2L_RI_Overlap.pdf",width=1.5,height=0.75)
+```
+
+
+#Splicing Map
+
+#Structure
+```{r}
+n<-10
+gd<-as.data.frame(rbind(c("UE",1,50,-0.03,-0.01,"exon"),
+                        c("UI5",51,350,-0.022,-0.018,"intron"),
+                        c("UI3",351+n,650+n,-0.022,-0.018,"intron"),
+                        c("EX3",651+n,700+n,-0.03,-0.01,"a_exon"),
+                        c("EX5",701+n*2,750+n*2,-0.03,-0.01,"a_exon"),
+                        c("DI5",751+n*2,1050+n*2,-0.022,-0.018,"intron"),
+                        c("DI3",1051+n*3,1350+n*3,-0.022,-0.018,"intron"),
+                        c("DE",1351+n*3,1400+n*3,-0.03,-0.01,"exon"),
+                        c("break",351,351+n,-0.03,0.05,"break"),
+                        c("break",711,711+n,-0.03,0.05,"break"),
+                        c("break",1071,1071+n,-0.03,0.05,"break")))
+colnames(gd)<-c("Region","start","stop","y1","y2","C_type")
+gd$start<-as.numeric(gd$start)
+gd$stop<-as.numeric(gd$stop)
+gd$y1<-as.numeric(gd$y1)+0.005
+gd$y2<-as.numeric(gd$y2)+0.005
+
+ss<-as.data.frame(rbind(c(0,-0.032,-50,1,1),
+                        c(51,-0.032,1,0,1),
+                        c(350,-0.032,300,1,1),
+                        c(360,-0.032,-300,0,1),
+                        c(660,-0.032,1,1,1),
+                        c(710,-0.032,50,0,1)))
+colnames(ss)<-c("xend","yend","annotation","justa","justb")
+ss$yend<-ss$yend+0.005
+
+Add_Regions<-function(Combined){
+  Combined$Region<-NA
+  Combined$Region[which(Combined$Pos<=50)]="UE"
+  Combined$Region[which(Combined$Pos>=51 & Combined$Pos<=350)]="UI5"
+  Combined$Region[which(Combined$Pos>=351 & Combined$Pos<=650)]="UI3"
+  Combined$Region[which(Combined$Pos>=651 & Combined$Pos<=700)]="EX3"
+  Combined$Region[which(Combined$Pos>=701 & Combined$Pos<=750)]="EX5"
+  Combined$Region[which(Combined$Pos>=751 & Combined$Pos<=1050)]="DI5"
+  Combined$Region[which(Combined$Pos>=1051 & Combined$Pos<=1350)]="DI3"
+  Combined$Region[which(Combined$Pos>=1351 & Combined$Pos<=1400)]="DE"
+  return(Combined)
+}
+
+
+a=c("UE","UI5") 
+b=c("UI3","EX3")
+c=c("EX5","DI5")
+d=c("DI3", "DE")
+```
+
+#K562
+```{r}
+Combined<-read.table("Summary_Files/Encode_K562_SM_Counts.txt",header=T)
+Combined<-Add_Regions(Combined)
+
+Combined$Pos[which(Combined$Region %in% b)]<-Combined$Pos[which(Combined$Region %in% b)]+n
+Combined$Pos[which(Combined$Region %in% c)]<-Combined$Pos[which(Combined$Region %in% c)]+n*2
+Combined$Pos[which(Combined$Region %in% d)]<-Combined$Pos[which(Combined$Region %in% d)]+n*3
+Combined$Group<-factor(Combined$Group,levels=c("Retained","Skipped","Control"))
+
+g1<-ggplot()+
+  geom_path(data=Combined, aes(x=Pos, y=Counts, color=Group),size=1.2)+
+  scale_color_manual(values=c("Retained"="blue","Skipped" = "red", "Control"="black"))+
+  theme_classic()+
+  geom_segment(aes(y=0, yend=0.1, x=50, xend=50), linetype="dotted")+
+  geom_segment(aes(y=0, yend=0.1, x=650+n, xend=650+n), linetype="dotted")+
+  geom_segment(aes(y=0, yend=0.1, x=750+n*2, xend=750+n*2), linetype="dotted")+
+  geom_segment(aes(y=0, yend=0.1, x=1350+n*3, xend=1350+n*3), linetype="dotted")+
+  ylab("eCLIP Peak Enrichment")+
+  geom_rect(data=gd, mapping=aes(xmin=start, 
+                                 xmax=stop, 
+                                 ymin=y1, 
+                                 ymax=y2, 
+                                 fill=C_type),size = 1,show.legend = F)+
+  scale_fill_manual(values=c("a_exon"="orange", "intron"="grey", "exon"="black", "break"="white"))+
+  geom_text(data=ss, aes(x=xend, y=yend,label = annotation, hjust=justa, vjust=justb),size=5)+
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.title.y=element_text(size=15,color="black"),
+        axis.text.y=element_text(size=15,color="black"),
+        #axis.ticks.y=element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.border = element_blank(),
+        axis.line.x = element_blank(),
+        legend.position = "bottom",
+        legend.text=element_text(size=15),
+        legend.title=element_blank())+
+  xlab("")
+g1
+ggsave("Figures/K562_Splicing_Map.pdf",g1,width=6,height=4)
+
+```
+
+#HepG2
+```{r}
+Combined<-read.table("Summary_Files/Encode_HepG2_SM_Counts.txt",header=T)
+Combined<-Add_Regions(Combined)
+
+Combined$Pos[which(Combined$Region %in% b)]<-Combined$Pos[which(Combined$Region %in% b)]+n
+Combined$Pos[which(Combined$Region %in% c)]<-Combined$Pos[which(Combined$Region %in% c)]+n*2
+Combined$Pos[which(Combined$Region %in% d)]<-Combined$Pos[which(Combined$Region %in% d)]+n*3
+Combined$Group<-factor(Combined$Group,levels=c("Retained","Skipped","Control"))
+
+g1<-ggplot()+
+  geom_path(data=Combined, aes(x=Pos, y=Counts, color=Group),size=1.2)+
+  scale_color_manual(values=c("Retained"="blue","Skipped" = "red", "Control"="black"))+
+  theme_classic()+
+  geom_segment(aes(y=0, yend=0.1, x=50, xend=50), linetype="dotted")+
+  geom_segment(aes(y=0, yend=0.1, x=650+n, xend=650+n), linetype="dotted")+
+  geom_segment(aes(y=0, yend=0.1, x=750+n*2, xend=750+n*2), linetype="dotted")+
+  geom_segment(aes(y=0, yend=0.1, x=1350+n*3, xend=1350+n*3), linetype="dotted")+
+  ylab("eCLIP Peak Enrichment")+
+  geom_rect(data=gd, mapping=aes(xmin=start, 
+                                 xmax=stop, 
+                                 ymin=y1, 
+                                 ymax=y2, 
+                                 fill=C_type),size = 1,show.legend = F)+
+  scale_fill_manual(values=c("a_exon"="orange", "intron"="grey", "exon"="black", "break"="white"))+
+  geom_text(data=ss, aes(x=xend, y=yend,label = annotation, hjust=justa, vjust=justb),size=5)+
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.title.y=element_text(size=15,color="black"),
+        axis.text.y=element_text(size=15,color="black"),
+        #axis.ticks.y=element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.border = element_blank(),
+        axis.line.x = element_blank(),
+        legend.position = "bottom",
+        legend.text=element_text(size=15),
+        legend.title=element_blank())+
+  xlab("")
+g1
+ggsave("Figures/HepG2_Splicing_Map.pdf",g1,width=6,height=4)
+
+```
+
+#Ovarian-HepG2
+```{r}
+Combined<-read.table("Summary_Files/Ovarian_HepG2.txt",header=T)
+Combined<-Add_Regions(Combined)
+
+Combined$Pos[which(Combined$Region %in% b)]<-Combined$Pos[which(Combined$Region %in% b)]+n
+Combined$Pos[which(Combined$Region %in% c)]<-Combined$Pos[which(Combined$Region %in% c)]+n*2
+Combined$Pos[which(Combined$Region %in% d)]<-Combined$Pos[which(Combined$Region %in% d)]+n*3
+Combined$Group<-factor(Combined$Group,levels=c("Retained","Skipped","Control"))
+
+g1<-ggplot()+
+  geom_path(data=Combined, aes(x=Pos, y=Counts, color=Group),size=1.2)+
+  scale_color_manual(values=c("Retained"="blue","Skipped" = "red", "Control"="black"))+
+  theme_classic()+
+  geom_segment(aes(y=0, yend=0.1, x=50, xend=50), linetype="dotted")+
+  geom_segment(aes(y=0, yend=0.1, x=650+n, xend=650+n), linetype="dotted")+
+  geom_segment(aes(y=0, yend=0.1, x=750+n*2, xend=750+n*2), linetype="dotted")+
+  geom_segment(aes(y=0, yend=0.1, x=1350+n*3, xend=1350+n*3), linetype="dotted")+
+  ylab("eCLIP Peak Enrichment")+
+  geom_rect(data=gd, mapping=aes(xmin=start, 
+                                 xmax=stop, 
+                                 ymin=y1, 
+                                 ymax=y2, 
+                                 fill=C_type),size = 1,show.legend = F)+
+  scale_fill_manual(values=c("a_exon"="orange", "intron"="grey", "exon"="black", "break"="white"))+
+  geom_text(data=ss, aes(x=xend, y=yend,label = annotation, hjust=justa, vjust=justb),size=5)+
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.title.y=element_text(size=15,color="black"),
+        axis.text.y=element_text(size=15,color="black"),
+        #axis.ticks.y=element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.border = element_blank(),
+        axis.line.x = element_blank(),
+        legend.position = "bottom",
+        legend.text=element_text(size=15),
+        legend.title=element_blank())+
+  xlab("")
+g1
+ggsave("Figures/Ovarian_HepG2_Splicing_Map.pdf",g1,width=6,height=4)
+
+```
+
+#Ovarian-K562
+```{r}
+Combined<-read.table("Summary_Files/Ovarian_K562.txt",header=T)
+Combined<-Add_Regions(Combined)
+
+Combined$Pos[which(Combined$Region %in% b)]<-Combined$Pos[which(Combined$Region %in% b)]+n
+Combined$Pos[which(Combined$Region %in% c)]<-Combined$Pos[which(Combined$Region %in% c)]+n*2
+Combined$Pos[which(Combined$Region %in% d)]<-Combined$Pos[which(Combined$Region %in% d)]+n*3
+Combined$Group<-factor(Combined$Group,levels=c("Retained","Skipped","Control"))
+
+g1<-ggplot()+
+  geom_path(data=Combined, aes(x=Pos, y=Counts, color=Group),size=1.2)+
+  scale_color_manual(values=c("Retained"="blue","Skipped" = "red", "Control"="black"))+
+  theme_classic()+
+  geom_segment(aes(y=0, yend=0.1, x=50, xend=50), linetype="dotted")+
+  geom_segment(aes(y=0, yend=0.1, x=650+n, xend=650+n), linetype="dotted")+
+  geom_segment(aes(y=0, yend=0.1, x=750+n*2, xend=750+n*2), linetype="dotted")+
+  geom_segment(aes(y=0, yend=0.1, x=1350+n*3, xend=1350+n*3), linetype="dotted")+
+  ylab("eCLIP Peak Enrichment")+
+  geom_rect(data=gd, mapping=aes(xmin=start, 
+                                 xmax=stop, 
+                                 ymin=y1, 
+                                 ymax=y2, 
+                                 fill=C_type),size = 1,show.legend = F)+
+  scale_fill_manual(values=c("a_exon"="orange", "intron"="grey", "exon"="black", "break"="white"))+
+  geom_text(data=ss, aes(x=xend, y=yend,label = annotation, hjust=justa, vjust=justb),size=5)+
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.title.y=element_text(size=15,color="black"),
+        axis.text.y=element_text(size=15,color="black"),
+        #axis.ticks.y=element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.border = element_blank(),
+        axis.line.x = element_blank(),
+        legend.position = "bottom",
+        legend.text=element_text(size=15),
+        legend.title=element_blank())+
+  xlab("")
+g1
+ggsave("Figures/Ovarian_K562_Splicing_Map.pdf",g1,width=6,height=4)
+
+```
+
+#Pancrean-HepG2
+```{r}
+Combined<-read.table("Summary_Files/Pancreas_HepG2.txt",header=T)
+Combined<-Add_Regions(Combined)
+
+Combined$Pos[which(Combined$Region %in% b)]<-Combined$Pos[which(Combined$Region %in% b)]+n
+Combined$Pos[which(Combined$Region %in% c)]<-Combined$Pos[which(Combined$Region %in% c)]+n*2
+Combined$Pos[which(Combined$Region %in% d)]<-Combined$Pos[which(Combined$Region %in% d)]+n*3
+Combined$Group<-factor(Combined$Group,levels=c("Retained","Skipped","Control"))
+
+g1<-ggplot()+
+  geom_path(data=Combined, aes(x=Pos, y=Counts, color=Group),size=1.2)+
+  scale_color_manual(values=c("Retained"="blue","Skipped" = "red", "Control"="black"))+
+  theme_classic()+
+  geom_segment(aes(y=0, yend=0.1, x=50, xend=50), linetype="dotted")+
+  geom_segment(aes(y=0, yend=0.1, x=650+n, xend=650+n), linetype="dotted")+
+  geom_segment(aes(y=0, yend=0.1, x=750+n*2, xend=750+n*2), linetype="dotted")+
+  geom_segment(aes(y=0, yend=0.1, x=1350+n*3, xend=1350+n*3), linetype="dotted")+
+  ylab("eCLIP Peak Enrichment")+
+  geom_rect(data=gd, mapping=aes(xmin=start, 
+                                 xmax=stop, 
+                                 ymin=y1, 
+                                 ymax=y2, 
+                                 fill=C_type),size = 1,show.legend = F)+
+  scale_fill_manual(values=c("a_exon"="orange", "intron"="grey", "exon"="black", "break"="white"))+
+  geom_text(data=ss, aes(x=xend, y=yend,label = annotation, hjust=justa, vjust=justb),size=5)+
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.title.y=element_text(size=15,color="black"),
+        axis.text.y=element_text(size=15,color="black"),
+        #axis.ticks.y=element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.border = element_blank(),
+        axis.line.x = element_blank(),
+        legend.position = "bottom",
+        legend.text=element_text(size=15),
+        legend.title=element_blank())+
+  xlab("")
+g1
+ggsave("Figures/Pancrean_HepG2_Splicing_Map.pdf",g1,width=6,height=4)
+
+```
+
+#Pancrean-K562
+```{r}
+Combined<-read.table("Summary_Files/Pancreas_K562.txt",header=T)
+Combined<-Add_Regions(Combined)
+
+Combined$Pos[which(Combined$Region %in% b)]<-Combined$Pos[which(Combined$Region %in% b)]+n
+Combined$Pos[which(Combined$Region %in% c)]<-Combined$Pos[which(Combined$Region %in% c)]+n*2
+Combined$Pos[which(Combined$Region %in% d)]<-Combined$Pos[which(Combined$Region %in% d)]+n*3
+Combined$Group<-factor(Combined$Group,levels=c("Retained","Skipped","Control"))
+
+g1<-ggplot()+
+  geom_path(data=Combined, aes(x=Pos, y=Counts, color=Group),size=1.2)+
+  scale_color_manual(values=c("Retained"="blue","Skipped" = "red", "Control"="black"))+
+  theme_classic()+
+  geom_segment(aes(y=0, yend=0.1, x=50, xend=50), linetype="dotted")+
+  geom_segment(aes(y=0, yend=0.1, x=650+n, xend=650+n), linetype="dotted")+
+  geom_segment(aes(y=0, yend=0.1, x=750+n*2, xend=750+n*2), linetype="dotted")+
+  geom_segment(aes(y=0, yend=0.1, x=1350+n*3, xend=1350+n*3), linetype="dotted")+
+  ylab("eCLIP Peak Enrichment")+
+  geom_rect(data=gd, mapping=aes(xmin=start, 
+                                 xmax=stop, 
+                                 ymin=y1, 
+                                 ymax=y2, 
+                                 fill=C_type),size = 1,show.legend = F)+
+  scale_fill_manual(values=c("a_exon"="orange", "intron"="grey", "exon"="black", "break"="white"))+
+  geom_text(data=ss, aes(x=xend, y=yend,label = annotation, hjust=justa, vjust=justb),size=5)+
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.title.y=element_text(size=15,color="black"),
+        axis.text.y=element_text(size=15,color="black"),
+        #axis.ticks.y=element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        panel.border = element_blank(),
+        axis.line.x = element_blank(),
+        legend.position = "bottom",
+        legend.text=element_text(size=15),
+        legend.title=element_blank())+
+  xlab("")
+g1
+ggsave("Figures/Pancrean_K562_Splicing_Map.pdf",g1,width=6,height=4)
+```
