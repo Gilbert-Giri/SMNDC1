@@ -1,0 +1,135 @@
+---
+title: "SMNDC1_RSEM_Analysis"
+output: html_document
+date: "2023-07-13"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Loading the Libraries
+```{r}
+library(tximport)
+library(DESeq2)
+library(dplyr)
+library(org.Hs.eg.db)
+library(ggrepel)
+library(clusterProfiler)
+```
+
+#Running DESEQ on Pan
+```{r}
+setwd("RSEM/")
+files <- list.files(pattern = "\\.genes.results$")[c(1:3,7:9)]
+files
+
+#Reading the files
+txi.rsem <- tximport(files, type = "rsem", txIn = FALSE, txOut = FALSE)
+txi.rsem$length[txi.rsem$length == 0] <- 1
+
+##Design for DESeq2
+sample<-sapply(files,function(x){strsplit(x,"[.]")[[1]][1]})
+condition<-factor(c(rep("C",3),rep("K",3)),levels=c("C","K"))
+sampleInfo<-data.frame(sample,condition)
+sampleInfo
+
+#Reading into DESEQ2
+deseqdata <- DESeqDataSetFromTximport(txi.rsem, colData = sampleInfo, design = ~condition)
+deseqdata
+
+# pre-filtering- Averaging at 5 per sample
+keep <- rowSums(counts(deseqdata)) >= 30 #average of 5 per sample 
+deseqdata <- deseqdata[keep,] #17078
+
+#checking the factor levels
+deseqdata$condition
+
+###Running DESEQ
+deseqdata<-DESeq(deseqdata)
+
+
+###Looking at the variability between replicates
+vsd <- vst(deseqdata)
+plotPCA(vsd, "condition")
+
+resultsNames(deseqdata)
+
+#K_vs_C
+res<-as.data.frame(results(deseqdata,name="condition_K_vs_C"))
+res$Genes<-rownames(res)
+res <- res %>% mutate(gene_type = case_when(log2FoldChange >= 1 & padj <= 0.05 ~ "up",
+                                            log2FoldChange <= -1 & padj <= 0.05 ~ "down",
+                                            TRUE ~ "ns"))
+res$Gene_Sym<-mapIds(org.Hs.eg.db,keys = res$Genes,column = "SYMBOL",keytype="ENSEMBL",multiVals = "first")
+write.table(res,"../Summary_Files/sh_vs_ctrl_Pan.txt",sep="\t",col.names = T,row.names = F,quote=F)
+```
+
+#Running DESEQ on Ov
+```{r}
+files <- list.files(pattern = "\\.genes.results$")[c(4:6,10:12)]
+
+#Reading the files
+txi.rsem <- tximport(files, type = "rsem", txIn = FALSE, txOut = FALSE)
+txi.rsem$length[txi.rsem$length == 0] <- 1
+
+##Design for DESeq2
+sample<-sapply(files,function(x){strsplit(x,"[.]")[[1]][1]})
+condition<-factor(c(rep("C",3),rep("K",3)),levels=c("C","K"))
+sampleInfo<-data.frame(sample,condition)
+sampleInfo
+
+#Reading into DESEQ2
+deseqdata <- DESeqDataSetFromTximport(txi.rsem, colData = sampleInfo, design = ~condition)
+deseqdata
+
+# pre-filtering- Averaging at 5 per sample
+keep <- rowSums(counts(deseqdata)) >= 30 #average of 5 per sample 
+deseqdata <- deseqdata[keep,] #17229
+
+#checking the factor levels
+deseqdata$condition
+
+###Running DESEQ
+deseqdata<-DESeq(deseqdata)
+
+
+###Looking at the variability between replicates
+vsd <- vst(deseqdata)
+plotPCA(vsd, "condition")
+resultsNames(deseqdata)
+
+#K_vs_C
+res<-as.data.frame(results(deseqdata,name="condition_K_vs_C"))
+res$Genes<-rownames(res)
+res <- res %>% mutate(gene_type = case_when(log2FoldChange >= 1 & padj <= 0.05 ~ "up",
+                                            log2FoldChange <= -1 & padj <= 0.05 ~ "down",
+                                            TRUE ~ "ns"))
+res$Gene_Sym<-mapIds(org.Hs.eg.db,keys = res$Genes,column = "SYMBOL",keytype="ENSEMBL",multiVals = "first")
+write.table(res,"../Summary_Files/sh_vs_ctrl_Ov.txt",sep="\t",col.names = T,row.names = F,quote=F)
+```
+
+#Output Tables for GSEA
+```{r}
+Pan<-read.table("../Summary_Files/sh_vs_ctrl_Pan.txt",header=T)
+Pan<-Pan[,c("Gene_Sym","log2FoldChange")]
+Pan<-Pan[order(Pan$log2FoldChange,decreasing=T),]
+Pan<-Pan[!is.na(Pan$Gene_Sym),]
+write.table(Pan,"../Summary_Files/Pan_GSEA_Sorted.rnk",sep="\t",col.names = F,row.names = F,quote=F)
+
+Ov<-read.table("../Summary_Files/sh_vs_ctrl_Ov.txt",header=T)
+Ov<-Ov[,c("Gene_Sym","log2FoldChange")]
+Ov<-Ov[order(Ov$log2FoldChange,decreasing=T),]
+Ov<-Ov[!is.na(Ov$Gene_Sym),]
+write.table(Ov,"../Summary_Files/Ov_GSEA_Sorted.rnk",sep="\t",col.names = F,row.names = F,quote=F)
+```
+
+
+
+
+
+
+
+
