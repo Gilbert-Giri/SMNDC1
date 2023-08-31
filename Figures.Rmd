@@ -2,6 +2,8 @@
 title: "Figures"
 output: html_document
 date: "2023-08-04"
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -16,9 +18,297 @@ library(clusterProfiler)
 library(ggVennDiagram)
 ```
 
+#Main Figure
 
-#Figure 2A - Volcano Plot in PDAC
+#Fig 2A
+
+#Fig 2A- Splicing Distributions
 ```{r}
+rm(list=ls())
+Pancreatic_Events<-read.table("Summary_Files//All_Events_Pan.txt",header=T)
+Ovarian_Events<-read.table("Summary_Files/All_Events_Ov.txt",header=T)
+
+#Getting the Significant Events
+Pancreatic_Events_Sig<-Pancreatic_Events[which(Pancreatic_Events$Total_Count_1>=30 & Pancreatic_Events$Total_Count_2>=30 & 
+                                                 Pancreatic_Events$PValue<0.05 & Pancreatic_Events$FDR<0.05),]
+  
+Ovarian_Events_Sig<-Ovarian_Events[which(Ovarian_Events$Total_Count_1>=30 & Ovarian_Events$Total_Count_2>=30 &
+                                           Ovarian_Events$PValue<0.05 & Ovarian_Events$FDR<0.05),]
+
+Events_in_Both<-intersect(Pancreatic_Events_Sig$Identifier,Ovarian_Events_Sig$Identifier)
+
+#Getting Values
+Common_Events<-merge(Pancreatic_Events_Sig[c("Identifier","IncLevelDifference")],Ovarian_Events_Sig[c("Identifier","IncLevelDifference")],by="Identifier")
+colnames(Common_Events)<-c("Identifier","Pan","Ov")
+Common_Events$Event_Type<-sapply(Common_Events$Identifier,function(x){strsplit(x,"_")[[1]][1]})
+Common_Events$Event_Type<-factor(Common_Events$Event_Type,levels=c("SE","A5SS","A3SS","MXE","RI"))
+
+ggplot(Common_Events, aes(Pan))+
+  geom_histogram(fill="#8AA54E",color="black",breaks=seq(-0.5,0.5,0.05),size=0.1)+
+  geom_vline(xintercept = 0,linetype="dashed",color="black",size=0.1)+
+  facet_wrap(~Event_Type, ncol = 5)+
+  theme_classic()+
+  scale_y_continuous(breaks = c(0,50,100),       
+                     limits = c(0,130))+
+  scale_x_continuous(breaks = c(-0.3,0,0.3),       
+                     limits = c(-0.5,0.5))+
+  labs(x="",y="")+
+  theme(legend.position = "none",
+        strip.text.x = element_blank(),
+        strip.background = element_blank())+
+  theme(axis.text.x=element_text(size=3, color="black"), 
+        axis.text.y=element_blank(),
+        axis.title = element_blank(),
+        panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank(),
+        axis.ticks.y=element_blank(),
+        axis.line.y = element_blank())
+ggsave("Figures/2A_Del_PSI_Dist_Pan.pdf",width=2.1,height=0.75)
+
+ggplot(Common_Events, aes(Ov))+
+  geom_histogram(fill="#BE733E",color="black",breaks=seq(-0.5,0.5,0.05),size=0.1)+
+  geom_vline(xintercept = 0,linetype="dashed",color="black",size=0.1)+
+  facet_wrap(~Event_Type, ncol = 5)+
+  theme_classic()+
+  scale_y_continuous(breaks = c(0,50,100),       
+                     limits = c(0,130))+
+  scale_x_continuous(breaks = c(-0.3,0,0.3),       
+                     limits = c(-0.5,0.5))+
+  labs(x="",y="")+
+  theme(legend.position = "none",
+        strip.text.x = element_blank(),
+        strip.background = element_blank())+
+  theme(axis.text.x=element_text(size=3, color="black"), 
+        axis.text.y=element_blank(),
+        axis.title = element_blank(),
+        panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank(),
+        axis.ticks.y=element_blank(),
+        axis.line.y = element_blank())
+ggsave("Figures/2A_Del_PSI_Dist_Ov.pdf",width=2.1,height=0.75)
+
+```
+
+#Fig 2A- Splicing Barplot
+```{r}
+rm(list=ls())
+Pancreatic_Events<-read.table("Summary_Files/All_Events_Pan.txt",header=T)
+Ovarian_Events<-read.table("Summary_Files/All_Events_Ov.txt",header=T)
+
+#Getting the Significant Events
+Pancreatic_Events_Sig<-Pancreatic_Events[which(Pancreatic_Events$Total_Count_1>=30 & Pancreatic_Events$Total_Count_2>=30 & 
+                                                 Pancreatic_Events$PValue<0.05 & Pancreatic_Events$FDR<0.05),]
+  
+Ovarian_Events_Sig<-Ovarian_Events[which(Ovarian_Events$Total_Count_1>=30 & Ovarian_Events$Total_Count_2>=30 &
+                                           Ovarian_Events$PValue<0.05 & Ovarian_Events$FDR<0.05),]
+
+#Making a BarPplot with the Proportion of Significant Events in both cell line
+Event_Count_Pan<-data.frame(table(Pancreatic_Events_Sig$column_label),"PDAC")
+Event_Count_Ov<-data.frame(table(Ovarian_Events_Sig$column_label),"HGSOC")
+colnames(Event_Count_Pan)<-c("Event","Count","Sample")
+colnames(Event_Count_Ov)<-c("Event","Count","Sample")
+Event_Counts<-rbind(Event_Count_Pan,Event_Count_Ov)
+Event_Counts$Event<-as.character(Event_Counts$Event)
+Event_Counts$Event[which(Event_Counts$Event=="SE")]<-"CE"
+Event_Counts$Event<-factor(Event_Counts$Event,levels=c("CE","A5SS","A3SS","MXE","RI"))
+Event_Counts$Sample<-factor(Event_Counts$Sample,levels=c("PDAC","HGSOC"))
+
+library(ggplot2)
+ggplot(Event_Counts,aes(x=Event,y=Count,fill=Sample))+
+  geom_bar(stat="identity", position="dodge")+
+  labs(x="",y="# of Events")+
+  theme_classic()+
+  scale_fill_manual(values = c(PDAC="#8AA54E",HGSOC="#BE733E"))+
+  #coord_flip()+
+  theme(legend.position =c(0.85, .75),
+        legend.text=element_text(size=5),
+        legend.title=element_text(size=6),
+        axis.text=element_text(size=8, color="black"), 
+        axis.title = element_text(size=10, color="black"),
+        panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank(),
+        legend.background = element_blank())+
+  guides(fill=guide_legend(title="Cancer Type"))+
+  theme(legend.key.size = unit(0.3, 'cm'))
+
+ggsave("Figures/2A_Common_Events_Distribution.pdf",width=3,height=1.5)
+```
+
+#Figure 2B- PSI Scatter Plot
+```{r}
+rm(list=ls())
+Pancreatic_Events<-read.table("Summary_Files/All_Events_Pan.txt",header=T)
+Ovarian_Events<-read.table("Summary_Files/All_Events_Ov.txt",header=T)
+
+#Getting the Significant Events
+Pancreatic_Events_Sig<-Pancreatic_Events[which(Pancreatic_Events$Total_Count_1>=30 & Pancreatic_Events$Total_Count_2>=30 & 
+                                                 Pancreatic_Events$PValue<0.05 & Pancreatic_Events$FDR<0.05),]
+  
+Ovarian_Events_Sig<-Ovarian_Events[which(Ovarian_Events$Total_Count_1>=30 & Ovarian_Events$Total_Count_2>=30 &
+                                           Ovarian_Events$PValue<0.05 & Ovarian_Events$FDR<0.05),]
+
+Events_in_Both<-intersect(Pancreatic_Events_Sig$Identifier,Ovarian_Events_Sig$Identifier)
+
+#Getting Values
+Common_Events<-merge(Pancreatic_Events_Sig[c("Identifier","IncLevelDifference")],Ovarian_Events_Sig[c("Identifier","IncLevelDifference")],by="Identifier")
+colnames(Common_Events)<-c("Identifier","Pan","Ov")
+Common_Events$Color<-"#C0BFBF"
+Common_Events$Color[which(Common_Events$Pan>0 & Common_Events$Ov>0)]<-"#8A181A"
+Common_Events$Color[which(Common_Events$Pan<0 & Common_Events$Ov<0)]<-"#2A2D7C"
+
+sig_up_genes <- Common_Events %>%
+  dplyr::filter(Identifier %in% c("SE_ENSG00000102882_MAPK3_chr16:30118098-30118163_30117669-30117784_30118348-30118538_-"))
+
+ggplot(Common_Events[which(sapply(Common_Events$Identifier,function(x){strsplit(x,"_")[[1]][1]})=="SE"),],aes(x = Pan,y = Ov,color=Color,fill = Color))+
+  geom_point(shape = 21,alpha=0.5)+
+  scale_fill_identity()+
+  scale_colour_identity()+
+  labs(x="dPSI PDAC (Ctrl-KD)",y="dPSI OvCa (Ctrl-KD)")+
+  geom_point(data = sig_up_genes,shape = 21,alpha=1, fill = "#D5732E",colour = "black")+
+  geom_text_repel(data = sig_up_genes,aes(label = "MapK3\n(ERK1)"),force = 2,nudge_x = -0.2,nudge_y = 0.1,colour = "black",size=3)+
+  theme_classic()+
+  theme(axis.text=element_text(size=6, color="black"), 
+        axis.title = element_text(size=8, color="black"),
+        panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank(),
+        legend.background = element_blank())+
+  theme(legend.key.size = unit(1, 'cm'))
+ggsave("Figures/2B_Common_SE_Events_PSI.pdf",width=1.5,height=1.5)
+
+ggplot(Common_Events[which(sapply(Common_Events$Identifier,function(x){strsplit(x,"_")[[1]][1]})=="RI"),],aes(x = Pan,y = Ov,color=Color,fill = Color))+
+  geom_point(shape = 21,alpha=0.5)+
+  scale_fill_identity()+
+  scale_colour_identity()+
+  labs(x="dPSI PDAC (Ctrl-KD)",y="dPSI OvCa (Ctrl-KD)")+
+  #geom_point(data = sig_up_genes,shape = 21,alpha=1, fill = "#D5732E",colour = "black")+
+  #geom_text_repel(data = sig_up_genes,aes(label = "MapK3\n(ERK1)"),force = 2,nudge_x = -0.2,nudge_y = 0.1,colour = "black",size=2)+
+  theme_classic()+
+  theme(axis.text=element_text(size=6, color="black"), 
+        axis.title = element_text(size=8, color="black"),
+        panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank(),
+        legend.background = element_blank())+
+  theme(legend.key.size = unit(1, 'cm'))
+ggsave("Supp_Figures/Common_RI_Events_PSI.pdf",width=1.5,height=1.5)
+```
+
+#Figure 2C - Overlap Between AS Skipped Exons Events
+```{r}
+rm(list=ls())
+Pancreatic_Events<-read.table("Summary_Files/All_Events_Pan.txt",header=T)
+Ovarian_Events<-read.table("Summary_Files/All_Events_Ov.txt",header=T)
+
+#Getting the Significant Events
+Pancreatic_Events<-Pancreatic_Events[which(Pancreatic_Events$Total_Count_1>=30 & Pancreatic_Events$Total_Count_2>=30 & 
+                                                 Pancreatic_Events$PValue<0.05 & Pancreatic_Events$FDR<0.05),]
+  
+Ovarian_Events<-Ovarian_Events[which(Ovarian_Events$Total_Count_1>=30 & Ovarian_Events$Total_Count_2>=30 &
+                                           Ovarian_Events$PValue<0.05 & Ovarian_Events$FDR<0.05),]
+
+#Making a list of SE Genes
+CE<-list("PDAC"=Pancreatic_Events$Identifier[which(Pancreatic_Events$column_label=="SE")],"HGSOC"=Ovarian_Events$Identifier[which(Ovarian_Events$column_label=="SE")])
+
+ggVennDiagram(CE,color="black",label_alpha = 0,label_size = 6,edge_size = 0.5,set_size=4,label = "count")+
+  scale_fill_gradient(low="white",high = "Gray")+
+  scale_color_manual(values = c("PDAC" = "#8AA54E","HGSOC" ="#D5732E"))+
+  theme(legend.position = "none")+
+  theme(panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank(),
+        legend.background = element_blank(),
+        axis.title = element_text(size=1, color="black"))
+ggsave("Figures/2C_CE_Overlap.pdf",width=2,height=1.5)
+
+#Calcualting significance
+
+Pancreatic_Events<-read.table("Summary_Files/All_Events_Pan.txt",header=T)
+Ovarian_Events<-read.table("Summary_Files/All_Events_Ov.txt",header=T)
+
+Pancreatic_Events<-Pancreatic_Events[which(Pancreatic_Events$column_label=="SE"),]
+Ovarian_Events<-Ovarian_Events[which(Ovarian_Events$column_label=="SE"),]
+
+#Getting the Significant Events
+Pancreatic_Events_sig<-Pancreatic_Events[which(Pancreatic_Events$Total_Count_1>=30 & Pancreatic_Events$Total_Count_2>=30 & 
+                                                 Pancreatic_Events$PValue<0.05 & Pancreatic_Events$FDR<0.05),]
+  
+Ovarian_Events_sig<-Ovarian_Events[which(Ovarian_Events$Total_Count_1>=30 & Ovarian_Events$Total_Count_2>=30 &
+                                           Ovarian_Events$PValue<0.05 & Ovarian_Events$FDR<0.05),]
+
+ov<-length(intersect(Pancreatic_Events_sig$Identifier,Ovarian_Events_sig$Identifier))
+gene_set_1<-length(Pancreatic_Events_sig$Identifier)
+universe<-length(unique(c(Pancreatic_Events$Identifier,Ovarian_Events$Identifier)))
+gene_set_2<-length(unique(Ovarian_Events_sig$Identifier))
+
+phyper(ov,gene_set_1,universe-gene_set_1,gene_set_2,lower.tail=F)
+
+
+```
+
+#Figure 2C - Overlap Between AS Retained Introns Events
+```{r}
+rm(list=ls())
+Pancreatic_Events<-read.table("Summary_Files/All_Events_Pan.txt",header=T)
+Ovarian_Events<-read.table("Summary_Files/All_Events_Ov.txt",header=T)
+
+#Getting the Significant Events
+Pancreatic_Events<-Pancreatic_Events[which(Pancreatic_Events$Total_Count_1>=30 & Pancreatic_Events$Total_Count_2>=30 & 
+                                                 Pancreatic_Events$PValue<0.05 & Pancreatic_Events$FDR<0.05),]
+  
+Ovarian_Events<-Ovarian_Events[which(Ovarian_Events$Total_Count_1>=30 & Ovarian_Events$Total_Count_2>=30 &
+                                           Ovarian_Events$PValue<0.05 & Ovarian_Events$FDR<0.05),]
+
+#Making a list of SE Genes
+RI<-list("PDAC"=Pancreatic_Events$Identifier[which(Pancreatic_Events$column_label=="RI")],"HGSOC"=Ovarian_Events$Identifier[which(Ovarian_Events$column_label=="RI")])
+
+ggVennDiagram(RI,color="black",label_alpha = 0,label_size = 6,edge_size = 0.5,set_size=4,label = "count")+
+  scale_fill_gradient(low="white",high = "Gray")+
+  scale_color_manual(values = c("PDAC" = "#8AA54E","HGSOC" ="#D5732E"))+
+  theme(legend.position = "none")+
+  theme(panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank(),
+        legend.background = element_blank(),
+        axis.title = element_text(size=1, color="black"))
+
+ggsave("Figures/2C_RI_Overlap.pdf",width=2,height=1.5)
+
+
+
+#Calcualting significance
+Pancreatic_Events<-read.table("Summary_Files/All_Events_Pan.txt",header=T)
+Ovarian_Events<-read.table("Summary_Files/All_Events_Ov.txt",header=T)
+
+
+Pancreatic_Events<-Pancreatic_Events[which(Pancreatic_Events$column_label=="RI"),]
+Ovarian_Events<-Ovarian_Events[which(Ovarian_Events$column_label=="RI"),]
+
+#Getting the Significant Events
+Pancreatic_Events_sig<-Pancreatic_Events[which(Pancreatic_Events$Total_Count_1>=30 & Pancreatic_Events$Total_Count_2>=30 & 
+                                                 Pancreatic_Events$PValue<0.05 & Pancreatic_Events$FDR<0.05),]
+  
+Ovarian_Events_sig<-Ovarian_Events[which(Ovarian_Events$Total_Count_1>=30 & Ovarian_Events$Total_Count_2>=30 &
+                                           Ovarian_Events$PValue<0.05 & Ovarian_Events$FDR<0.05),]
+
+ov<-length(intersect(Pancreatic_Events_sig$Identifier,Ovarian_Events_sig$Identifier))
+gene_set_1<-length(Pancreatic_Events_sig$Identifier)
+universe<-length(unique(c(Pancreatic_Events$Identifier,Ovarian_Events$Identifier)))
+gene_set_2<-length(unique(Ovarian_Events_sig$Identifier))
+
+phyper(ov,gene_set_1,universe-gene_set_1,gene_set_2,lower.tail=F)
+```
+
+
+
+#Supplementary Figures
+
+#Volcano Plot in PDAC
+```{r}
+rm(list=ls())
 res_df<-read.table("Summary_Files/sh_vs_ctrl_Pan.txt",header=T)
 
 ##Volcano Plot
@@ -63,10 +353,10 @@ volcano<-res_df %>%
         panel.border = element_blank(),
         legend.background = element_blank())
 volcano
-ggsave("../SMNDC1-final/Figures/2A_Pan_DESEQ_Volcano.pdf",width=1.5,height=1.5)
+ggsave("Supp_Figures/Pan_DESEQ_Volcano.pdf",width=1.5,height=1.5)
 ```
 
-#Figure 2B - Volcano Plot in Ov
+#Volcano Plot in Ov
 ```{r}
 rm(list=ls())
 res_df<-read.table("Summary_Files/sh_vs_ctrl_Ov.txt",header=T)
@@ -113,10 +403,10 @@ volcano<-res_df %>%
         panel.border = element_blank(),
         legend.background = element_blank())
 volcano
-ggsave("../SMNDC1-final/Figures/2B_Ov_DESEQ_Volcano.pdf",width=1.5,height=1.5)
+ggsave("Supp_Figures/Ov_DESEQ_Volcano.pdf",width=1.5,height=1.5)
 ```
 
-#Fig 2C-Overlaping GE between PDAC & Ov
+#Overlaping GE between PDAC & Ov
 ```{r}
 rm(list=ls())
 Pan<-read.table("Summary_Files/sh_vs_ctrl_Pan.txt",header=T)
@@ -133,7 +423,7 @@ Ov_Down<-Ov$Genes[which(Ov$gene_type=="down")]
 Up_list<-list("PDAC"=Pan_Up,"HGSOC"=Ov_Up)
 Down_list<-list("PDAC"=Pan_Down,"HGSOC"=Ov_Down)
 
-ggVennDiagram(Up_list,color="black",label_alpha = 0,label_size = 2,edge_size = 0.5,set_size=2,label = "count")+
+ggVennDiagram(Up_list,color="black",label_alpha = 0,label_size = 6,edge_size = 0.5,set_size=4,label = "count")+
   scale_fill_gradient(low="white",high = "#FE0000")+
   scale_color_manual(values = c("PDAC" = "black","HGSOC" ="black"))+
   theme(legend.position = "none")+
@@ -142,9 +432,9 @@ ggVennDiagram(Up_list,color="black",label_alpha = 0,label_size = 2,edge_size = 0
         panel.border = element_blank(),
         legend.background = element_blank(),
         axis.title = element_text(size=1, color="black"))
-ggsave("Figures/2C_Upregulated_Overlaps.pdf",width=1.5,height=0.75)
+ggsave("Supp_Figures/Upregulated_Overlaps.pdf",width=2,height=1.5)
   
-ggVennDiagram(Down_list,color="black",label_alpha = 0,label_size = 2,edge_size = 0.5,set_size=2,label = "count")+
+ggVennDiagram(Down_list,color="black",label_alpha = 0,label_size = 6,edge_size = 0.5,set_size=4,label = "count")+
   scale_fill_gradient(low="white",high = "#079BF5")+
   scale_color_manual(values = c("PDAC" = "black","HGSOC" ="black"))+
   theme(legend.position = "none")+
@@ -153,11 +443,42 @@ ggVennDiagram(Down_list,color="black",label_alpha = 0,label_size = 2,edge_size =
         panel.border = element_blank(),
         legend.background = element_blank(),
         axis.title = element_text(size=1, color="black"))
-ggsave("Figures/2C_DownRegulated_Overlaps.pdf",width=1.5,height=0.75)
+ggsave("Supp_Figures/DownRegulated_Overlaps.pdf",width=2,height=1.5)
 
 ```
 
-#Fig 2D-GSEA-Pan
+#Hyper-geometric test
+```{r}
+rm(list=ls())
+Pan<-read.table("Summary_Files/sh_vs_ctrl_Pan.txt",header=T)
+Ov<-read.table("Summary_Files/sh_vs_ctrl_Ov.txt",header=T)
+
+Pan_Up<-Pan$Genes[which(Pan$gene_type=="up")]
+Pan_Down<-Pan$Genes[which(Pan$gene_type=="down")]
+
+Ov_Up<-Ov$Genes[which(Ov$gene_type=="up")]
+Ov_Down<-Ov$Genes[which(Ov$gene_type=="down")]
+
+all_detected_genes<-unique(c(Pan$Genes,Ov$Genes))
+
+#Testing for how enriched are Pan upregulated genes in Ov upregulated genes
+ov<-length(intersect(Pan_Up,Ov_Up))
+gene_set_1<-length(Pan_Up)
+universe<-length(all_detected_genes)
+gene_set_2<-length(Ov_Up)
+
+phyper(ov,gene_set_1,universe-gene_set_1,gene_set_2,lower.tail=F)
+
+#Testing for how enriched are Pan downregulated genes in Ov downregulated genes
+ov<-length(intersect(Pan_Down,Ov_Down))
+gene_set_1<-length(Pan_Down)
+universe<-length(all_detected_genes)
+gene_set_2<-length(Ov_Down)
+
+phyper(ov,gene_set_1,universe-gene_set_1,gene_set_2,lower.tail=F)
+```
+
+#GSEA-Pan
 ```{r}
 rm(list=ls())
 GSEA_Pos<-read.table("Summary_Files/Pancreatic_DESEQ.GseaPreranked.1691179573388/gsea_report_for_na_pos_1691179573388.tsv",sep="\t",header=T)
@@ -184,7 +505,7 @@ ggplot(df, aes(NES, -log10(FDR.q.val))) +
   geom_text_repel(data = sig_genes[which(sig_genes$NES>0),], 
                   aes(label = NAME),
                   force = 1,
-                  size=2,
+                  size=1.5,
                   nudge_y =0,
                   nudge_x = 5)+
   geom_text_repel(data = sig_genes[which(sig_genes$NES<0),], 
@@ -200,10 +521,10 @@ ggplot(df, aes(NES, -log10(FDR.q.val))) +
         panel.background = element_blank(), 
         plot.background = element_blank(), 
         panel.border = element_blank())
-ggsave("Figures/2D_GSEA_Pan.pdf",width=1.5,height=1.5)
+ggsave("Supp_Figures/GSEA_Pan.pdf",width=1.5,height=1.5)
 ```
 
-#Fig 2E-GSEA-Pan
+#GSEA-Ov
 ```{r}
 rm(list=ls())
 GSEA_Pos<-read.table("Summary_Files/Ovarian_DESEQ.GseaPreranked.1691179517599/gsea_report_for_na_pos_1691179517599.tsv",sep="\t",header=T)
@@ -230,13 +551,13 @@ ggplot(df, aes(NES, -log10(FDR.q.val))) +
   geom_text_repel(data = sig_genes[which(sig_genes$NES>0),], 
                   aes(label = NAME),
                   force = 1,
-                  size=2,
+                  size=1.5,
                   nudge_y =0,
                   nudge_x = 5)+
   geom_text_repel(data = sig_genes[which(sig_genes$NES<0),], 
                   aes(label = NAME),
                   force = 1,
-                  size=2,
+                  size=1.5,
                   nudge_y = 0.5,
                   nudge_x = -2)+
   labs(x="NES", y="-log10 FDR") +
@@ -246,184 +567,24 @@ ggplot(df, aes(NES, -log10(FDR.q.val))) +
         panel.background = element_blank(), 
         plot.background = element_blank(), 
         panel.border = element_blank())
-ggsave("Figures/2E_GSEA_Ov.pdf",width=1.5,height=1.5)
+ggsave("Supp_Figures/GSEA_Ov.pdf",width=1.5,height=1.5)
 ```
 
-#Fig 2F- GSEA Plot of selected pathway
-
-#Fig 2G- Splicing Distributions
+#Overlap Between AS and GE Genes (PDAC)
 ```{r}
 rm(list=ls())
 Pancreatic_Events<-read.table("Summary_Files/All_Events_Pan.txt",header=T)
-Ovarian_Events<-read.table("Summary_Files/All_Events_Ov.txt",header=T)
-
-#Getting the Significant Events
-Pancreatic_Events_Sig<-Pancreatic_Events[which(Pancreatic_Events$Total_Count_1>=30 & Pancreatic_Events$Total_Count_2>=30 & 
-                                                 Pancreatic_Events$PValue<0.05 & Pancreatic_Events$FDR<0.05),]
-  
-Ovarian_Events_Sig<-Ovarian_Events[which(Ovarian_Events$Total_Count_1>=30 & Ovarian_Events$Total_Count_2>=30 &
-                                           Ovarian_Events$PValue<0.05 & Ovarian_Events$FDR<0.05),]
-
-Events_in_Both<-intersect(Pancreatic_Events_Sig$Identifier,Ovarian_Events_Sig$Identifier)
-
-#Getting Values
-Common_Events<-merge(Pancreatic_Events_Sig[c("Identifier","IncLevelDifference")],Ovarian_Events_Sig[c("Identifier","IncLevelDifference")],by="Identifier")
-colnames(Common_Events)<-c("Identifier","Pan","Ov")
-Common_Events$Event_Type<-sapply(Common_Events$Identifier,function(x){strsplit(x,"_")[[1]][1]})
-Common_Events$Event_Type<-factor(Common_Events$Event_Type,levels=c("SE","A5SS","A3SS","MXE","RI"))
-
-ggplot(Common_Events, aes(Pan))+
-  geom_histogram(fill="#BE733E",color="black",breaks=seq(-0.5,0.5,0.05),size=0.1)+
-  geom_vline(xintercept = 0,linetype="dashed",color="black",size=0.1)+
-  facet_wrap(~Event_Type, ncol = 5)+
-  theme_classic()+
-  scale_y_continuous(breaks = c(0,50,100),       
-                     limits = c(0,130))+
-  scale_x_continuous(breaks = c(-0.3,0,0.3),       
-                     limits = c(-0.5,0.5))+
-  labs(x="",y="")+
-  theme(legend.position = "none",
-        strip.text.x = element_blank(),
-        strip.background = element_blank())+
-  theme(axis.text.x=element_text(size=2.5, color="black"), 
-        axis.text.y=element_blank(),
-        axis.title = element_blank(),
-        panel.background = element_blank(), 
-        plot.background = element_blank(), 
-        panel.border = element_blank(),
-        axis.ticks.y=element_blank(),
-        axis.line.y = element_blank())
-ggsave("Figures/2G_Del_PSI_Dist_Pan.pdf",width=2.1,height=0.75)
-
-ggplot(Common_Events, aes(Ov))+
-  geom_histogram(fill="#8AA54E",color="black",breaks=seq(-0.5,0.5,0.05),size=0.1)+
-  geom_vline(xintercept = 0,linetype="dashed",color="black",size=0.1)+
-  facet_wrap(~Event_Type, ncol = 5)+
-  theme_classic()+
-  scale_y_continuous(breaks = c(0,50,100),       
-                     limits = c(0,130))+
-  scale_x_continuous(breaks = c(-0.3,0,0.3),       
-                     limits = c(-0.5,0.5))+
-  labs(x="",y="")+
-  theme(legend.position = "none",
-        strip.text.x = element_blank(),
-        strip.background = element_blank())+
-  theme(axis.text.x=element_text(size=2.5, color="black"), 
-        axis.text.y=element_blank(),
-        axis.title = element_blank(),
-        panel.background = element_blank(), 
-        plot.background = element_blank(), 
-        panel.border = element_blank(),
-        axis.ticks.y=element_blank(),
-        axis.line.y = element_blank())
-ggsave("Figures/2G_Del_PSI_Dist_Ov.pdf",width=2.1,height=0.75)
-
-```
-
-#Fig 2G- Splicing Distributions-Bar Plot
-```{r}
-rm(list=ls())
-Pancreatic_Events<-read.table("Summary_Files/All_Events_Pan.txt",header=T)
-Ovarian_Events<-read.table("Summary_Files/All_Events_Ov.txt",header=T)
-
-#Getting the Significant Events
-Pancreatic_Events_Sig<-Pancreatic_Events[which(Pancreatic_Events$Total_Count_1>=30 & Pancreatic_Events$Total_Count_2>=30 & 
-                                                 Pancreatic_Events$PValue<0.05 & Pancreatic_Events$FDR<0.05),]
-  
-Ovarian_Events_Sig<-Ovarian_Events[which(Ovarian_Events$Total_Count_1>=30 & Ovarian_Events$Total_Count_2>=30 &
-                                           Ovarian_Events$PValue<0.05 & Ovarian_Events$FDR<0.05),]
-
-#Making a BarPplot with the Proportion of Significant Events in both cell line
-Event_Count_Pan<-data.frame(table(Pancreatic_Events_Sig$column_label),"PDAC")
-Event_Count_Ov<-data.frame(table(Ovarian_Events_Sig$column_label),"HGSOC")
-colnames(Event_Count_Pan)<-c("Event","Count","Sample")
-colnames(Event_Count_Ov)<-c("Event","Count","Sample")
-Event_Counts<-rbind(Event_Count_Pan,Event_Count_Ov)
-Event_Counts$Event<-as.character(Event_Counts$Event)
-Event_Counts$Event[which(Event_Counts$Event=="SE")]<-"CE"
-Event_Counts$Event<-factor(Event_Counts$Event,levels=c("CE","A5SS","A3SS","MXE","RI"))
-Event_Counts$Sample<-factor(Event_Counts$Sample,levels=c("PDAC","HGSOC"))
-
-library(ggplot2)
-ggplot(Event_Counts,aes(x=Event,y=Count,fill=Sample))+
-  geom_bar(stat="identity", position="dodge")+
-  labs(x="",y="# of Events")+
-  theme_classic()+
-  scale_fill_manual(values = c(PDAC="#8AA54E",HGSOC="#BE733E"))+
-  #coord_flip()+
-  theme(legend.position =c(0.85, .75),
-        legend.text=element_text(size=5),
-        legend.title=element_text(size=6),
-        axis.text=element_text(size=6, color="black"), 
-        axis.title = element_text(size=8, color="black"),
-        panel.background = element_blank(), 
-        plot.background = element_blank(), 
-        panel.border = element_blank(),
-        legend.background = element_blank())+
-  guides(fill=guide_legend(title="Cancer Type"))+
-  theme(legend.key.size = unit(0.3, 'cm'))
-
-ggsave("Figures/2G_Common_Events_Distribution.pdf",width=3,height=1.5)
-```
-
-#Figure 2H- PSI Scatter Plot
-```{r}
-rm(list=ls())
-Pancreatic_Events<-read.table("Summary_Files/All_Events_Pan.txt",header=T)
-Ovarian_Events<-read.table("Summary_Files/All_Events_Ov.txt",header=T)
-
-#Getting the Significant Events
-Pancreatic_Events_Sig<-Pancreatic_Events[which(Pancreatic_Events$Total_Count_1>=30 & Pancreatic_Events$Total_Count_2>=30 & 
-                                                 Pancreatic_Events$PValue<0.05 & Pancreatic_Events$FDR<0.05),]
-  
-Ovarian_Events_Sig<-Ovarian_Events[which(Ovarian_Events$Total_Count_1>=30 & Ovarian_Events$Total_Count_2>=30 &
-                                           Ovarian_Events$PValue<0.05 & Ovarian_Events$FDR<0.05),]
-
-Events_in_Both<-intersect(Pancreatic_Events_Sig$Identifier,Ovarian_Events_Sig$Identifier)
-
-#Getting Values
-Common_Events<-merge(Pancreatic_Events_Sig[c("Identifier","IncLevelDifference")],Ovarian_Events_Sig[c("Identifier","IncLevelDifference")],by="Identifier")
-colnames(Common_Events)<-c("Identifier","Pan","Ov")
-Common_Events$Color<-"#C0BFBF"
-Common_Events$Color[which(Common_Events$Pan>0 & Common_Events$Ov>0)]<-"#8A181A"
-Common_Events$Color[which(Common_Events$Pan<0 & Common_Events$Ov<0)]<-"#2A2D7C"
-
-sig_up_genes <- Common_Events %>%
-  dplyr::filter(Identifier %in% c("SE_ENSG00000102882_MAPK3_chr16:30118098-30118163_30117669-30117784_30118348-30118538_-"))
-
-ggplot(Common_Events,aes(x = Pan,y = Ov,color=Color,fill = Color))+
-  geom_point(shape = 21,alpha=0.5)+
-  scale_fill_identity()+
-  scale_colour_identity()+
-  labs(x="dPSI PDAC (Ctrl-KD)",y="dPSI OvCa (Ctrl-KD)")+
-  geom_point(data = sig_up_genes,shape = 21,alpha=1, fill = "#D5732E",colour = "black")+
-  geom_text_repel(data = sig_up_genes,aes(label = "MapK3\n(ERK1)"),force = 2,nudge_x = -0.2,nudge_y = 0.1,colour = "black",size=2)+
-  theme_classic()+
-  theme(axis.text=element_text(size=6, color="black"), 
-        axis.title = element_text(size=8, color="black"),
-        panel.background = element_blank(), 
-        plot.background = element_blank(), 
-        panel.border = element_blank(),
-        legend.background = element_blank())+
-  theme(legend.key.size = unit(1, 'cm'))
-ggsave("Figures/2H_Common_Events_PSI.pdf",width=1.5,height=1.5)
-```
-
-#Figure 2I - Overlap Between AS and GE Genes (PDAC)
-```{r}
-rm(list=ls())
-Pancreatic_Events<-read.table("Summary_Files//All_Events_Pan.txt",header=T)
 Pan_GE<-read.table("Summary_Files/sh_vs_ctrl_Pan.txt",header=T)
 
 #Getting all the Sig Events
-Pancreatic_Events<-Pancreatic_Events[which(Pancreatic_Events$Total_Count_1>=30 & Pancreatic_Events$Total_Count_2>=30 & 
+Pancreatic_Events_sig<-Pancreatic_Events[which(Pancreatic_Events$Total_Count_1>=30 & Pancreatic_Events$Total_Count_2>=30 & 
                                                  Pancreatic_Events$PValue<0.05 & Pancreatic_Events$FDR<0.05),]
 
 Pan_GE<-Pan_GE[which(Pan_GE$gene_type != "ns"),]
 
 #Making a list of DE and AS Genes
-Pan<-list("DE"=Pan_GE$Genes,"AS"=unique(Pancreatic_Events$GeneID))
-ggVennDiagram(Pan,color="black",label_alpha = 0,label_size = 2,edge_size = 0.5,set_size=2,label = "count")+
+Pan<-list("DE"=Pan_GE$Genes,"AS"=unique(Pancreatic_Events_sig$GeneID))
+ggVennDiagram(Pan,color="black",label_alpha = 0,label_size = 6,edge_size = 0.5,set_size=4,label = "count")+
   scale_fill_gradient(low="white",high = "#8AA54E")+
   scale_color_manual(values = c("PDAC" = "black","HGSOC" ="black"))+
   theme(legend.position = "none")+
@@ -432,7 +593,17 @@ ggVennDiagram(Pan,color="black",label_alpha = 0,label_size = 2,edge_size = 0.5,s
         panel.border = element_blank(),
         legend.background = element_blank(),
         axis.title = element_text(size=1, color="black"))
-ggsave("Figures/2I_AS_GE_Overlap_Pan.pdf",width=1.5,height=0.75)
+ggsave("Supp_Figures/AS_GE_Overlap_Pan.pdf",width=2,height=1.5)
+
+
+#Calcualting significance
+ov<-length(intersect(Pan_GE$Genes,Pancreatic_Events_sig$GeneID))
+gene_set_1<-length(Pan_GE$Genes)
+universe<-length(unique(c(Pan_GE$Genes,Pancreatic_Events$GeneID)))
+gene_set_2<-length(unique(Pancreatic_Events_sig$GeneID))
+
+phyper(ov,gene_set_1,universe-gene_set_1,gene_set_2,lower.tail=F)
+
 
 ```
 
@@ -443,15 +614,15 @@ Ovarian_Events<-read.table("Summary_Files/All_Events_Ov.txt",header=T)
 Ov_GE<-read.table("Summary_Files/sh_vs_ctrl_Ov.txt",header=T)
 
 #Getting all the Sig Events
-Ovarian_Events<-Ovarian_Events[which(Ovarian_Events$Total_Count_1>=30 & Ovarian_Events$Total_Count_2>=30 &
+Ovarian_Events_sig<-Ovarian_Events[which(Ovarian_Events$Total_Count_1>=30 & Ovarian_Events$Total_Count_2>=30 &
                                            Ovarian_Events$PValue<0.05 & Ovarian_Events$FDR<0.05),]
 Ov_GE<-Ov_GE[which(Ov_GE$gene_type != "ns"),]
 
 
 #Making a list of DE and AS Genes
-Ov<-list("DE"=Ov_GE$Genes,"AS"=unique(Ovarian_Events$GeneID))
+Ov<-list("DE"=Ov_GE$Genes,"AS"=unique(Ovarian_Events_sig$GeneID))
 
-ggVennDiagram(Ov,color="black",label_alpha = 0,label_size = 2,edge_size = 0.5,set_size=2,label = "count")+
+ggVennDiagram(Ov,color="black",label_alpha = 0,label_size = 6,edge_size = 0.5,set_size=4,label = "count")+
   scale_fill_gradient(low="white",high = "#D5732E")+
   scale_color_manual(values = c("PDAC" = "black","HGSOC" ="black"))+
   theme(legend.position = "none")+
@@ -460,66 +631,17 @@ ggVennDiagram(Ov,color="black",label_alpha = 0,label_size = 2,edge_size = 0.5,se
         panel.border = element_blank(),
         legend.background = element_blank(),
         axis.title = element_text(size=1, color="black"))
-ggsave("Figures/2J_AS_GE_Overlap_Ov.pdf",width=1.5,height=0.75)
+ggsave("Supp_Figures/AS_GE_Overlap_Ov.pdf",width=2,height=1.5)
+
+
+#Calcualting significance
+ov<-length(intersect(Ov_GE$Genes,Ovarian_Events_sig$GeneID))
+gene_set_1<-length(Ov_GE$Genes)
+universe<-length(unique(c(Ov_GE$Genes,Ovarian_Events$GeneID)))
+gene_set_2<-length(unique(Ovarian_Events_sig$GeneID))
+
+phyper(ov,gene_set_1,universe-gene_set_1,gene_set_2,lower.tail=F)
 ```
-
-#Figure 2K - Overlap Between AS Skipped Exons Events
-```{r}
-rm(list=ls())
-Pancreatic_Events<-read.table("Summary_Files/All_Events_Pan.txt",header=T)
-Ovarian_Events<-read.table("Summary_Files/All_Events_Ov.txt",header=T)
-
-#Getting the Significant Events
-Pancreatic_Events<-Pancreatic_Events[which(Pancreatic_Events$Total_Count_1>=30 & Pancreatic_Events$Total_Count_2>=30 & 
-                                                 Pancreatic_Events$PValue<0.05 & Pancreatic_Events$FDR<0.05),]
-  
-Ovarian_Events<-Ovarian_Events[which(Ovarian_Events$Total_Count_1>=30 & Ovarian_Events$Total_Count_2>=30 &
-                                           Ovarian_Events$PValue<0.05 & Ovarian_Events$FDR<0.05),]
-
-#Making a list of SE Genes
-CE<-list("PDAC"=Pancreatic_Events$Identifier[which(Pancreatic_Events$column_label=="SE")],"HGSOC"=Ovarian_Events$Identifier[which(Ovarian_Events$column_label=="SE")])
-
-ggVennDiagram(CE,color="black",label_alpha = 0,label_size = 2,edge_size = 0.5,set_size=2,label = "count")+
-  scale_fill_gradient(low="white",high = "Gray")+
-  scale_color_manual(values = c("PDAC" = "#8AA54E","HGSOC" ="#D5732E"))+
-  theme(legend.position = "none")+
-  theme(panel.background = element_blank(), 
-        plot.background = element_blank(), 
-        panel.border = element_blank(),
-        legend.background = element_blank(),
-        axis.title = element_text(size=1, color="black"))
-ggsave("Figures/2K_CE_Overlap.pdf",width=1.5,height=0.75)
-```
-
-#Figure 2L - Overlap Between AS Retained Introns Events
-```{r}
-rm(list=ls())
-Pancreatic_Events<-read.table("Summary_Files/All_Events_Pan.txt",header=T)
-Ovarian_Events<-read.table("Summary_Files/All_Events_Ov.txt",header=T)
-
-#Getting the Significant Events
-Pancreatic_Events<-Pancreatic_Events[which(Pancreatic_Events$Total_Count_1>=30 & Pancreatic_Events$Total_Count_2>=30 & 
-                                                 Pancreatic_Events$PValue<0.05 & Pancreatic_Events$FDR<0.05),]
-  
-Ovarian_Events<-Ovarian_Events[which(Ovarian_Events$Total_Count_1>=30 & Ovarian_Events$Total_Count_2>=30 &
-                                           Ovarian_Events$PValue<0.05 & Ovarian_Events$FDR<0.05),]
-
-#Making a list of SE Genes
-RI<-list("PDAC"=Pancreatic_Events$Identifier[which(Pancreatic_Events$column_label=="RI")],"HGSOC"=Ovarian_Events$Identifier[which(Ovarian_Events$column_label=="RI")])
-
-ggVennDiagram(RI,color="black",label_alpha = 0,label_size = 2,edge_size = 0.5,set_size=2,label = "count")+
-  scale_fill_gradient(low="white",high = "Gray")+
-  scale_color_manual(values = c("PDAC" = "#8AA54E","HGSOC" ="#D5732E"))+
-  theme(legend.position = "none")+
-  theme(panel.background = element_blank(), 
-        plot.background = element_blank(), 
-        panel.border = element_blank(),
-        legend.background = element_blank(),
-        axis.title = element_text(size=1, color="black"))
-
-ggsave("Figures/2L_RI_Overlap.pdf",width=1.5,height=0.75)
-```
-
 
 #Splicing Map
 
@@ -613,7 +735,7 @@ g1<-ggplot()+
         legend.title=element_blank())+
   xlab("")
 g1
-ggsave("Figures/K562_Splicing_Map.pdf",g1,width=6,height=4)
+ggsave("Supp_Figures/K562_Splicing_Map.pdf",g1,width=6,height=4)
 
 ```
 
@@ -658,7 +780,7 @@ g1<-ggplot()+
         legend.title=element_blank())+
   xlab("")
 g1
-ggsave("Figures/HepG2_Splicing_Map.pdf",g1,width=6,height=4)
+ggsave("Supp_Figures/HepG2_Splicing_Map.pdf",g1,width=6,height=4)
 
 ```
 
@@ -703,7 +825,7 @@ g1<-ggplot()+
         legend.title=element_blank())+
   xlab("")
 g1
-ggsave("Figures/Ovarian_HepG2_Splicing_Map.pdf",g1,width=6,height=4)
+ggsave("Supp_Figures/Ovarian_HepG2_Splicing_Map.pdf",g1,width=6,height=4)
 
 ```
 
@@ -748,7 +870,7 @@ g1<-ggplot()+
         legend.title=element_blank())+
   xlab("")
 g1
-ggsave("Figures/Ovarian_K562_Splicing_Map.pdf",g1,width=6,height=4)
+ggsave("Supp_Figures/Ovarian_K562_Splicing_Map.pdf",g1,width=6,height=4)
 
 ```
 
@@ -793,7 +915,7 @@ g1<-ggplot()+
         legend.title=element_blank())+
   xlab("")
 g1
-ggsave("Figures/Pancrean_HepG2_Splicing_Map.pdf",g1,width=6,height=4)
+ggsave("Summary_Files/Pancrean_HepG2_Splicing_Map.pdf",g1,width=6,height=4)
 
 ```
 
@@ -838,5 +960,5 @@ g1<-ggplot()+
         legend.title=element_blank())+
   xlab("")
 g1
-ggsave("Figures/Pancrean_K562_Splicing_Map.pdf",g1,width=6,height=4)
+ggsave("Supp_Figures//Pancrean_K562_Splicing_Map.pdf",g1,width=6,height=4)
 ```
