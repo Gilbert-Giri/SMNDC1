@@ -21,7 +21,6 @@ library(ggVennDiagram)
 #Main Figure
 
 #Fig 2A
-
 #Fig 2A- Splicing Distributions
 ```{r}
 rm(list=ls())
@@ -168,7 +167,8 @@ ggplot(Common_Events[which(sapply(Common_Events$Identifier,function(x){strsplit(
   scale_colour_identity()+
   labs(x="dPSI PDAC (Ctrl-KD)",y="dPSI OvCa (Ctrl-KD)")+
   geom_point(data = sig_up_genes,shape = 21,alpha=1, fill = "#D5732E",colour = "black")+
-  geom_text_repel(data = sig_up_genes,aes(label = "MapK3\n(ERK1)"),force = 2,nudge_x = -0.2,nudge_y = 0.1,colour = "black",size=3)+
+  geom_text_repel(data = sig_up_genes,aes(label = "italic('MAPK3')"),force = 2,nudge_x = -0.25,nudge_y = 0.1,colour = "black",size=2,parse = TRUE)+
+  geom_text_repel(data = sig_up_genes,aes(label = "(ERK1)"),force = 2,nudge_x = -0.25,nudge_y = 0.02,colour = "black",size=2,parse = TRUE)+
   theme_classic()+
   theme(axis.text=element_text(size=6, color="black"), 
         axis.title = element_text(size=8, color="black"),
@@ -244,7 +244,7 @@ gene_set_1<-length(Pancreatic_Events_sig$Identifier)
 universe<-length(unique(c(Pancreatic_Events$Identifier,Ovarian_Events$Identifier)))
 gene_set_2<-length(unique(Ovarian_Events_sig$Identifier))
 
-phyper(ov,gene_set_1,universe-gene_set_1,gene_set_2,lower.tail=F)
+phyper(ov-1,gene_set_1,universe-gene_set_1,gene_set_2,lower.tail=F)
 
 
 ```
@@ -299,7 +299,7 @@ gene_set_1<-length(Pancreatic_Events_sig$Identifier)
 universe<-length(unique(c(Pancreatic_Events$Identifier,Ovarian_Events$Identifier)))
 gene_set_2<-length(unique(Ovarian_Events_sig$Identifier))
 
-phyper(ov,gene_set_1,universe-gene_set_1,gene_set_2,lower.tail=F)
+phyper(ov-1,gene_set_1,universe-gene_set_1,gene_set_2,lower.tail=F)
 ```
 
 
@@ -467,7 +467,7 @@ gene_set_1<-length(Pan_Up)
 universe<-length(all_detected_genes)
 gene_set_2<-length(Ov_Up)
 
-phyper(ov,gene_set_1,universe-gene_set_1,gene_set_2,lower.tail=F)
+phyper(ov-1,gene_set_1,universe-gene_set_1,gene_set_2,lower.tail=F)
 
 #Testing for how enriched are Pan downregulated genes in Ov downregulated genes
 ov<-length(intersect(Pan_Down,Ov_Down))
@@ -475,7 +475,7 @@ gene_set_1<-length(Pan_Down)
 universe<-length(all_detected_genes)
 gene_set_2<-length(Ov_Down)
 
-phyper(ov,gene_set_1,universe-gene_set_1,gene_set_2,lower.tail=F)
+phyper(ov-1,gene_set_1,universe-gene_set_1,gene_set_2,lower.tail=F)
 ```
 
 #GSEA-Pan
@@ -570,6 +570,7 @@ ggplot(df, aes(NES, -log10(FDR.q.val))) +
 ggsave("Supp_Figures/GSEA_Ov.pdf",width=1.5,height=1.5)
 ```
 
+
 #Overlap Between AS and GE Genes (PDAC)
 ```{r}
 rm(list=ls())
@@ -580,10 +581,10 @@ Pan_GE<-read.table("Summary_Files/sh_vs_ctrl_Pan.txt",header=T)
 Pancreatic_Events_sig<-Pancreatic_Events[which(Pancreatic_Events$Total_Count_1>=30 & Pancreatic_Events$Total_Count_2>=30 & 
                                                  Pancreatic_Events$PValue<0.05 & Pancreatic_Events$FDR<0.05),]
 
-Pan_GE<-Pan_GE[which(Pan_GE$gene_type != "ns"),]
+Pan_GE_sig<-Pan_GE[which(Pan_GE$gene_type != "ns"),]
 
 #Making a list of DE and AS Genes
-Pan<-list("DE"=Pan_GE$Genes,"AS"=unique(Pancreatic_Events_sig$GeneID))
+Pan<-list("DE"=Pan_GE_sig$Genes,"AS"=unique(Pancreatic_Events_sig$GeneID))
 ggVennDiagram(Pan,color="black",label_alpha = 0,label_size = 6,edge_size = 0.5,set_size=4,label = "count")+
   scale_fill_gradient(low="white",high = "#8AA54E")+
   scale_color_manual(values = c("PDAC" = "black","HGSOC" ="black"))+
@@ -597,14 +598,12 @@ ggsave("Supp_Figures/AS_GE_Overlap_Pan.pdf",width=2,height=1.5)
 
 
 #Calcualting significance
-ov<-length(intersect(Pan_GE$Genes,Pancreatic_Events_sig$GeneID))
-gene_set_1<-length(Pan_GE$Genes)
+ov<-length(intersect(Pan_GE_sig$Genes,Pancreatic_Events_sig$GeneID))
+gene_set_1<-length(Pan_GE_sig$Genes)
 universe<-length(unique(c(Pan_GE$Genes,Pancreatic_Events$GeneID)))
 gene_set_2<-length(unique(Pancreatic_Events_sig$GeneID))
 
-phyper(ov,gene_set_1,universe-gene_set_1,gene_set_2,lower.tail=F)
-
-
+phyper(ov-1,gene_set_1,universe-gene_set_1,gene_set_2,lower.tail=F)
 ```
 
 #Figure 2J - Overlap Between AS and GE Genes (OV)
@@ -616,11 +615,11 @@ Ov_GE<-read.table("Summary_Files/sh_vs_ctrl_Ov.txt",header=T)
 #Getting all the Sig Events
 Ovarian_Events_sig<-Ovarian_Events[which(Ovarian_Events$Total_Count_1>=30 & Ovarian_Events$Total_Count_2>=30 &
                                            Ovarian_Events$PValue<0.05 & Ovarian_Events$FDR<0.05),]
-Ov_GE<-Ov_GE[which(Ov_GE$gene_type != "ns"),]
+Ov_GE_sig<-Ov_GE[which(Ov_GE$gene_type != "ns"),]
 
 
 #Making a list of DE and AS Genes
-Ov<-list("DE"=Ov_GE$Genes,"AS"=unique(Ovarian_Events_sig$GeneID))
+Ov<-list("DE"=Ov_GE_sig$Genes,"AS"=unique(Ovarian_Events_sig$GeneID))
 
 ggVennDiagram(Ov,color="black",label_alpha = 0,label_size = 6,edge_size = 0.5,set_size=4,label = "count")+
   scale_fill_gradient(low="white",high = "#D5732E")+
@@ -635,12 +634,12 @@ ggsave("Supp_Figures/AS_GE_Overlap_Ov.pdf",width=2,height=1.5)
 
 
 #Calcualting significance
-ov<-length(intersect(Ov_GE$Genes,Ovarian_Events_sig$GeneID))
-gene_set_1<-length(Ov_GE$Genes)
+ov<-length(intersect(Ov_GE_sig$Genes,Ovarian_Events_sig$GeneID))
+gene_set_1<-length(Ov_GE_sig$Genes)
 universe<-length(unique(c(Ov_GE$Genes,Ovarian_Events$GeneID)))
 gene_set_2<-length(unique(Ovarian_Events_sig$GeneID))
 
-phyper(ov,gene_set_1,universe-gene_set_1,gene_set_2,lower.tail=F)
+phyper(ov-1,gene_set_1,universe-gene_set_1,gene_set_2,lower.tail=F)
 ```
 
 #Splicing Map
