@@ -1,0 +1,359 @@
+---
+title: "Pool_Generation"
+output: html_document
+date: "2026-09-16"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#libraries
+```{r}
+library("GenomicRanges")
+library("BSgenome.Hsapiens.UCSC.hg38")
+library("Biostrings")
+library("dplyr")
+library("tidyverse")
+```
+
+#Getting controls
+```{r}
+rm(list=ls())
+SE<-read.table("Pancreas/SE.MATS.JC.txt",header=T)
+RI<-read.table("Pancreas/RI.MATS.JC.txt",header=T)
+
+#Function to calculate sum of features
+Sum_JC<-function(x){sum(as.numeric(strsplit(x,split = ",")[[1]]))}
+Sum_Counts<-function(df){
+  df$IJC_Sum_1<-sapply(df$IJC_SAMPLE_1,Sum_JC)
+  df$IJC_Sum_2<-sapply(df$IJC_SAMPLE_2,Sum_JC)
+  df$SJC_Sum_1<-sapply(df$SJC_SAMPLE_1,Sum_JC)
+  df$SJC_Sum_2<-sapply(df$SJC_SAMPLE_2,Sum_JC)
+  df$Total_Count_1<-df$IJC_Sum_1+df$SJC_Sum_1
+  df$Total_Count_2<-df$IJC_Sum_2+df$SJC_Sum_2
+  return(df)
+}
+
+SE<-Sum_Counts(SE)
+RI<-Sum_Counts(RI)
+
+SE<-SE[which(SE$Total_Count_1>20 & SE$Total_Count_2>20),]
+RI<-RI[which(RI$Total_Count_1>20 & RI$Total_Count_2>20),]
+
+SE<-SE[which(SE$FDR<0.05 & SE$PValue<0.05 & abs(SE$IncLevelDifference)>0.2),]
+RI<-RI[which(RI$FDR<0.05 & RI$PValue<0.05 & abs(RI$IncLevelDifference)>0.2),]
+
+#Filtering for longer exon intron
+SE<-SE[which((SE$exonStart_0base-SE$upstreamEE>800)&(SE$downstreamES-SE$exonEnd>800)),]
+SE<-SE[which(SE$exonEnd-SE$exonStart_0base>100),]
+RI<-RI[which((RI$downstreamES-RI$upstreamEE>800)),]
+
+#Filtering the top ones
+SE<-SE[order(abs(SE$IncLevelDifference),decreasing = T),]
+RI<-RI[order(abs(RI$IncLevelDifference),decreasing = T),]
+
+SE$Event<-paste(SE$geneSymbol,SE$chr,SE$exonStart_0base,SE$exonEnd,SE$upstreamES,SE$upstreamEE,SE$downstreamES,SE$downstreamEE,SE$strand,sep="_")
+RI$Event<-paste(RI$geneSymbol,RI$chr,RI$riExonStart_0base,RI$riExonEnd,RI$upstreamES,RI$upstreamEE,RI$downstreamES,RI$downstreamEE,RI$strand,sep="_")
+
+#Making the ranges
+Chr<-c()
+Start<-c()
+End<-c()
+Strand<-c()
+Event<-c()
+for (i in 1:25){
+  if (SE$strand[i]=="+"){
+    Chr<-c(Chr,rep(SE$chr[i],52))
+    Strand<-c(Strand,rep(SE$strand[i],52))
+    Event<-c(Event,rep(SE$Event[i],52))
+    
+    UEE_bins<-seq(SE$upstreamEE[i]-60,SE$upstreamEE[i]+180,20)
+    SEE_bins<-seq(SE$exonEnd[i]-60,SE$exonEnd[i]+180,20)
+    SES_bins<-seq(SE$exonStart_0base[i]-180,SE$exonStart_0base[i]+60,20)
+    DES_bins<-seq(SE$downstreamES[i]-180,SE$downstreamES[i]+60,20)
+    
+    Start<-c(Start,UEE_bins,SEE_bins,SES_bins-108,DES_bins-108)
+    End<-c(End,UEE_bins+108,SEE_bins+108,SES_bins,DES_bins)
+    
+  } else if (SE$strand[i]=="-"){
+    Chr<-c(Chr,rep(SE$chr[i],52))
+    Strand<-c(Strand,rep(SE$strand[i],52))
+    Event<-c(Event,rep(SE$Event[i],52))
+    
+    UEE_bins<-seq(SE$downstreamES[i]-180,SE$downstreamES[i]+60,20)
+    SEE_bins<-seq(SE$exonStart_0base[i]-180,SE$exonStart_0base[i]+60,20)
+    SES_bins<-seq(SE$exonEnd[i]-60,SE$exonEnd[i]+180,20)
+    DES_bins<-seq(SE$upstreamEE[i]-60,SE$upstreamEE[i]+180,20)
+    
+    Start<-c(Start,UEE_bins-108,SEE_bins-108,SES_bins,DES_bins)
+    End<-c(End,UEE_bins,SEE_bins,SES_bins+108,DES_bins+108)
+  }
+}
+SE_tab<-data.frame(Chr,Start,End,Strand,Event)
+SE_tab$Group<-"SE"
+
+#For RI
+Chr<-c()
+Start<-c()
+End<-c()
+Strand<-c()
+Event<-c()
+for (i in 1:15){
+  if (RI$strand[i]=="+"){
+    Chr<-c(Chr,rep(RI$chr[i],26))
+    Strand<-c(Strand,rep(RI$strand[i],26))
+    Event<-c(Event,rep(RI$Event[i],26))
+    
+    UEE_bins<-seq(RI$upstreamEE[i]-60,RI$upstreamEE[i]+180,20)
+    DES_bins<-seq(RI$downstreamES[i]-180,RI$downstreamES[i]+60,20)
+    
+    Start<-c(Start,UEE_bins,DES_bins-108)
+    End<-c(End,UEE_bins+108,DES_bins)
+    
+  } else if (RI$strand[i]=="-"){
+    Chr<-c(Chr,rep(RI$chr[i],26))
+    Strand<-c(Strand,rep(RI$strand[i],26))
+    Event<-c(Event,rep(RI$Event[i],26))
+    
+    UEE_bins<-seq(RI$downstreamES[i]-180,RI$downstreamES[i]+60,20)
+    DES_bins<-seq(RI$upstreamEE[i]-60,RI$upstreamEE[i]+180,20)
+    
+    Start<-c(Start,UEE_bins-108,DES_bins)
+    End<-c(End,UEE_bins,DES_bins+108)
+  }
+}
+
+RI_tab<-data.frame(Chr,Start,End,Strand,Event)
+RI_tab$Group<-"RI"
+
+#Getting Mapk3 E4  & SMNDC1 PE region
+SE<-read.table("Pancreas/SE.MATS.JC.txt",header=T)
+SE$Event<-paste(SE$geneSymbol,SE$chr,SE$exonStart_0base,SE$exonEnd,SE$upstreamES,SE$upstreamEE,SE$downstreamES,SE$downstreamEE,SE$strand,sep="_")
+MapK<-SE[which(SE$exonStart_0base %in% c("110300546","30118098")),]
+
+#Making the ranges
+Chr<-c()
+Start<-c()
+End<-c()
+Strand<-c()
+Event<-c()
+for (i in 1:2){
+  if (MapK$strand[i]=="+"){
+    Chr<-c(Chr,rep(MapK$chr[i],52))
+    Strand<-c(Strand,rep(MapK$strand[i],52))
+    Event<-c(Event,rep(MapK$Event[i],52))
+    
+    UEE_bins<-seq(MapK$upstreamEE[i]-60,MapK$upstreamEE[i]+180,20)
+    SEE_bins<-seq(MapK$exonEnd[i]-60,MapK$exonEnd[i]+180,20)
+    SES_bins<-seq(MapK$exonStart_0base[i]-180,MapK$exonStart_0base[i]+60,20)
+    DES_bins<-seq(MapK$downstreamES[i]-180,MapK$downstreamES[i]+60,20)
+    
+    Start<-c(Start,UEE_bins,SEE_bins,SES_bins-108,DES_bins-108)
+    End<-c(End,UEE_bins+108,SEE_bins+108,SES_bins,DES_bins)
+    
+  } else if (MapK$strand[i]=="-"){
+    Chr<-c(Chr,rep(MapK$chr[i],52))
+    Strand<-c(Strand,rep(MapK$strand[i],52))
+    Event<-c(Event,rep(MapK$Event[i],52))
+    
+    UEE_bins<-seq(MapK$downstreamES[i]-180,MapK$downstreamES[i]+60,20)
+    SEE_bins<-seq(MapK$exonStart_0base[i]-180,MapK$exonStart_0base[i]+60,20)
+    SES_bins<-seq(MapK$exonEnd[i]-60,MapK$exonEnd[i]+180,20)
+    DES_bins<-seq(MapK$upstreamEE[i]-60,MapK$upstreamEE[i]+180,20)
+    
+    Start<-c(Start,UEE_bins-108,SEE_bins-108,SES_bins,DES_bins)
+    End<-c(End,UEE_bins,SEE_bins,SES_bins+108,DES_bins+108)
+  }
+}
+mapk_tab<-data.frame(Chr,Start,End,Strand,Event)
+mapk_tab$Group="MAPK"
+
+#
+controls<-rbind(SE_tab,RI_tab,mapk_tab)
+write.table(controls[c(1,2,3,5,6,4)],"Pool/Controls.bed",col.names = F,row.names = F,sep="\t",quote = F)
+```
+
+#Generating peaks for RBNS
+```{r}
+rm(list=ls())
+#Clipper
+gene<-read.table("Processed/SMNDC1_Gene_Meta.bed",sep="\t")
+taggd<-read.table("Processed/SMNDC1_HA_Meta.bed",sep="\t")
+
+#Skipper
+gene_skip<-read.table("Skipper/output/reproducible_enriched_windows/SMNDC1_Gene.reproducible_enriched_windows.tsv",header=T)
+taggd_skip<-read.table("Skipper/output/reproducible_enriched_windows/SMNDC1_Tag.reproducible_enriched_windows.tsv",header=T)
+
+gene_skip<-gene_skip[which(gene_skip$input_sum + gene_skip$clip_sum>50),]
+taggd_skip<-taggd_skip[which(taggd_skip$input_sum + taggd_skip$clip_sum>50),]
+
+gene_skip_sno_sca<-gene_skip[grepl("sca|sno|snRNA",gene_skip$gene_type_top),]
+tagged_skip_sno_sca<-taggd_skip[grepl("sca|sno|snRNA",taggd_skip$gene_type_top),]
+
+#Converting to GR
+gene_gr<-makeGRangesFromDataFrame(gene,seqnames.field = "V1",start.field = "V2",end.field = "V3",strand.field = "V6",keep.extra.columns = T)
+taggd_gr<-makeGRangesFromDataFrame(taggd,seqnames.field = "V1",start.field = "V2",end.field = "V3",strand.field = "V6",keep.extra.columns = T)
+
+gene_skip_gr<-makeGRangesFromDataFrame(gene_skip,seqnames.field = "chr",keep.extra.columns = T)
+taggd_skip_gr<-makeGRangesFromDataFrame(taggd_skip,seqnames.field = "chr",keep.extra.columns = T)
+
+#
+gene_skip_gr_ov<-gene_skip_gr[unique(queryHits(findOverlaps(gene_skip_gr,gene_gr)))]
+tagged_skip_gr_ov<-taggd_skip_gr[unique(queryHits(findOverlaps(taggd_skip_gr,taggd_gr)))]
+
+#getting the peaks 
+ov_between_cond<-gene_skip_gr_ov[unique(queryHits(findOverlaps(gene_skip_gr_ov,tagged_skip_gr_ov)))]
+ov_between_cond_df<-data.frame(ov_between_cond)
+ov_between_cond_df<-ov_between_cond_df[which(ov_between_cond_df$q_min<0.05 & ov_between_cond_df$p_min<0.05),]
+ov_between_cond_df<-ov_between_cond_df[which(ov_between_cond_df$enrichment_l2or_mean>3),]
+ov_between_cond_df<-ov_between_cond_df[which(ov_between_cond_df$width>90),]
+ov_between_cond_df$ID<-paste("Common",ov_between_cond_df$chr,ov_between_cond_df$start,ov_between_cond_df$end,ov_between_cond_df$strand,sep="_")
+
+#unique ones
+gene_unique<-gene_skip_gr_ov[-unique(queryHits(findOverlaps(gene_skip_gr_ov,tagged_skip_gr_ov)))] %>% data.frame()
+tag_unique<-tagged_skip_gr_ov[-unique(subjectHits(findOverlaps(gene_skip_gr_ov,tagged_skip_gr_ov)))] %>% data.frame()
+
+#Gene
+gene_unique<-gene_unique[which(gene_unique$q_min<0.05 & gene_unique$p_min<0.05),]
+gene_unique<-gene_unique[which(gene_unique$enrichment_l2or_mean>3),]
+gene_unique<-gene_unique[which(gene_unique$width>90),]
+gene_unique<-gene_unique[order(gene_unique$enrichment_l2or_mean,decreasing = T),]
+gene_unique<-gene_unique[!grepl("sca|sno|snRNA",gene_unique$gene_type_top),]
+gene_unique$ID<-paste("Gene",gene_unique$chr,gene_unique$start,gene_unique$end,gene_unique$strand,sep="_")
+
+#Tag
+tag_unique<-tag_unique[which(tag_unique$q_min<0.05 & tag_unique$p_min<0.05),]
+tag_unique<-tag_unique[which(tag_unique$enrichment_l2or_mean>3),]
+tag_unique<-tag_unique[which(tag_unique$width>90),]
+tag_unique<-tag_unique[order(tag_unique$enrichment_l2or_mean,decreasing = T),]
+tag_unique$ID<-paste("HA",tag_unique$chr,tag_unique$start,tag_unique$end,tag_unique$strand,sep="_")
+
+#all-peaks
+comb<-rbind(ov_between_cond_df[1:2500,],gene_unique[1:500,],tag_unique[1:500,])
+comb<-comb[,-4]
+colnames(comb)[1]<-"chr"
+
+comb_sub<-comb[,c("ID","enrichment_l2or_mean")]
+write.table(comb_sub,"Pool/SMNDC1_peaks_LFC.txt",sep="\t",col.names = T,row.names = F,quote = F)
+
+tagged_skip_sno_sca$ID<-paste("HA_SNO",tagged_skip_sno_sca$chr,tagged_skip_sno_sca$start,tagged_skip_sno_sca$end,tagged_skip_sno_sca$strand,sep="_")
+gene_skip_sno_sca$ID<-paste("GENO_SNO",gene_skip_sno_sca$chr,gene_skip_sno_sca$start,gene_skip_sno_sca$end,gene_skip_sno_sca$strand,sep="_")
+table(tagged_skip_sno_sca$ID %in% gene_skip_sno_sca$ID)
+
+comb<-comb[,colnames(gene_skip_sno_sca)]
+comb<-rbind(comb,gene_skip_sno_sca)
+comb$Width<-comb$end-comb$start
+comb$NS<-floor((comb$start+comb$end)/2)-60
+comb$NE<-floor((comb$start+comb$end)/2)+60
+
+write.table(comb[c("chr","start","end","ID","enrichment_l2or_mean","strand")],"../Pool/Peaks.bed",col.names = F,row.names = F,sep="\t",quote = F)
+write.table(comb,"Pool/Peaks_meta.txt",col.names = F,row.names = F,sep="\t",quote = F)
+
+```
+
+#Getting sequences
+```{r}
+rm(list=ls())
+
+#peas
+peaks<-read.table("Pool/Peaks.bed")
+peaks$NS<-floor((peaks$V3+peaks$V2)/2)-54
+peaks$NE<-floor((peaks$V3+peaks$V2)/2)+54
+
+#controls
+controls<-read.table("Pool/Controls.bed")
+controls$V4<-paste(controls$V4,controls$V2,controls$V3,controls$V5,sep="_")
+controls<-controls[!duplicated(paste(controls$V1,controls$V2,controls$V3,sep="_")),]
+
+#pcbp1-peaks
+pcbp1<-read.table("PCBP1.bed",sep="\t")
+pcbp1$Region<-sapply(pcbp1$V4,function(x){strsplit(x,"_")[[1]][2]})
+pcbp1<-pcbp1[which(pcbp1$Region=="Intron"),]
+pcbp1$V4<-paste("PCBP1",pcbp1$V1,pcbp1$V2,pcbp1$V3,pcbp1$V4,sep="_")
+pcbp1$NS<-floor((pcbp1$V3+pcbp1$V2)/2)-54
+pcbp1$NE<-floor((pcbp1$V3+pcbp1$V2)/2)+54
+pcbp1<-pcbp1[order(pcbp1$V7,decreasing=T),]
+pcbp1<-pcbp1[1:427,]
+
+p<-peaks[c("V1","NS","NE","V4","V5","V6")]
+q<-controls[c("V1","V2","V3","V4","V5","V6")]
+r<-pcbp1[c("V1","NS","NE","V4","V5","V6")]
+
+colnames(q)<-colnames(p)
+comb<-rbind(p,q,r)
+
+##Getting the sequences
+comb$NE<-comb$NE-1
+comb_gr<-makeGRangesFromDataFrame(comb,seqnames.field ="V1",start.field = "NS",end.field = "NE",strand.field = "V6",keep.extra.columns = T)
+hg38 <- BSgenome.Hsapiens.UCSC.hg38
+comb_seq <- getSeq(hg38, comb_gr) %>% data.frame()
+comb_df<-data.frame(comb_gr)
+comb_df$Seq<-comb_seq$.
+
+comb_df$fa<-paste("GAGTTCTACAGTCCGACGATC",comb_df$Seq,"TGGAATTCTCGGGTGCCAAGG",sep="")
+comb_df$name<-paste(">",comb_df$V4,sep="")
+write.table(comb_df[c("name","fa")],"Pool/SMNDC1_pool.fa",sep="\n",col.names = F,row.names = F,quote = F)
+
+```
+
+#SMNDC1 gtf
+```{r}
+library(tidyverse)
+rm(list=ls())
+
+fasta <- Biostrings::readDNAStringSet("SMNDC1_pool.fa")
+df <- data.frame(ID = names(fasta), Sequence = as.character(fasta), stringsAsFactors = FALSE)
+df$chr<-1:nrow(df)
+df$Seq<-sapply(df$Sequence,function(x){substr(x,22,129)})
+df$start<-1
+df$end<-108
+df$source<-"custom"
+df<-df[rep(seq_len(nrow(df)), each = 3), ]
+df$feature<-c("gene","transcript","exon")
+df$score<-"."
+df$strand<-"+"
+df$frame<-"."
+df$gene_id<-df$ID
+df$transcript_id<-paste(df$gene_id,"T1",sep="")
+df$exon_id<-paste(df$transcript_id,"E1",sep="")
+df$transcript_id[which(df$feature =="gene")]=""
+df$exon_id[which(df$feature !="exon")]=""
+df$attribute <- paste("gene_id",' "',df$ID,'"',";"," transcript_id ",' "',df$transcript_id,'"',";"," exon_id ",' "',df$exon_id,'"',";",sep="")
+df<-df[c("ID","source","feature","start","end","score","strand","frame","attribute")]
+write.table(df,"Pool/SMNDC1_pool_gtf.gtf",sep="\t",quote=F,col.names = F,row.names = F)
+
+n<-read.table("SMNDC1_pool_gtf.gtf",sep="\t")
+
+df_sub<-df[c("ID","Seq")]
+df_sub<-df_sub[!duplicated(df_sub$ID),]
+df_sub$ID<-paste(">",df_sub$ID,sep="")
+write.table(df_sub[c("ID","Seq")],"Pool/SMNDC1_fa.fa",sep="\n",col.names = F,row.names = F,quote = F)
+
+```
+
+#Mapping and Quantifying
+```{bash}
+#!/bin/bash
+#SBATCH --mem=64g
+#SBATCH -t 12:00:00
+#SBATCH -n 4
+
+gDir="SMNDC1_Ref/STAR"
+gtf="SMNDC1_Ref/SMNDC1_pool_gtf.gtf"
+fastq=""
+outDir="SMNDC1_STAR"
+file=$1
+
+/work/users/g/g/ggiri/Tools/STAR/bin/Linux_x86_64_static/STAR \
+        --runThreadN 4 \
+        --alignIntronMax 299999 \
+        --sjdbGTFfile ${gtf} \
+        --genomeDir ${gDir} \
+        --readFilesIn ${fastq}/${file}.fastq.gz \
+        --readFilesCommand zcat \
+        --outFileNamePrefix ${outDir}/${file} \
+        --outSAMtype BAM Unsorted \
+        --quantMode GeneCounts
+
+```
