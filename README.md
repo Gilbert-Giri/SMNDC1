@@ -8,4 +8,5 @@ Codes Used for SMNDC1 Project:
 5) SMNDC1_AS_Analysis.Rmd: R markdown file for pre-processing rmats output files. 
 6) SMNDC1_GE_Analysis.Rmd: R markdown file for running differential gene expression analysis on RSEM output and prepare summary tables.
 7) SMNDC1_figures.Rmd: R markdown file for analysis and making figures used in the paper.
-8) CRASP.Rmd: R markdown file for making CRASP-seq figures. 
+8) CRASP.Rmd: R markdown file for making CRASP-seq figures.
+9) nsRBNS_Pool_and _Quantification.Rmd: R markdown and bash code for generating nsRBNS pool and mapping the sequencing reads.
