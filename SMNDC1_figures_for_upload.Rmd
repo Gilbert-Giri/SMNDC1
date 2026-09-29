@@ -1,0 +1,1057 @@
+---
+title: "Figures"
+output: html_document
+date: "2025-11-18"
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+library(ggpubr)
+library(gridExtra)
+library(ggpubr)
+library(ComplexHeatmap)
+library(survival)
+library(survminer)
+library(reshape2)
+library(enrichplot)
+library(dplyr)
+library(extrafont)
+library(ggrepel)
+library(tidyr)
+library(BSgenome.Hsapiens.NCBI.GRCh38)
+library(BSgenome)
+library(stringr)
+library(ggmsa)
+library(ggVennDiagram)
+library(clusterProfiler)
+library(ggh4x)
+library(org.Hs.eg.db)
+extrafont::loadfonts()
+```
+
+#Gene Expression Volcano-Panc
+```{r}
+rm(list=ls())
+res_df<-read.table("sh_vs_ctrl_Pan.txt",header=T)
+
+##Volcano Plot
+cols <- c("up" = "#C23D69", "down" = "#20A4F3", "ns" = "grey") 
+sizes <- c("up" = 0.75, "down" = 0.75, "ns" = 0.25) 
+alphas <- c("up" = 1, "down" = 1, "ns" = 0.5)
+
+sig_up_genes <- res_df %>%
+  dplyr::filter(Genes %in% c("ENSG00000119953"))
+
+Up_genes<-as.character(length(which(res_df$gene_type=="up")))
+Down_genes<-as.character(length(which(res_df$gene_type=="down")))
+
+volcano<-res_df %>%
+  ggplot(aes(x = log2FoldChange,
+             y = -log10(padj),
+             fill = gene_type,
+             color=gene_type,
+             size = gene_type,
+             alpha =gene_type)) + 
+  geom_point(shape = 21) +
+  geom_hline(yintercept = -log10(0.05),
+             linetype = "dashed") + 
+  geom_vline(xintercept = c(log2(0.5), log2(2)),
+             linetype = "dashed")+
+  scale_fill_manual(values = cols) + # Modify point colour
+  scale_color_manual(values = cols) + # Modify point colour
+  scale_size_manual(values = sizes) + # Modify point size
+  scale_alpha_manual(values = alphas) + # Modify point transparency
+  scale_x_continuous(breaks = c(-4,-2,-0,2,4),       
+                     limits = c(-5.5, 5.5))+
+  theme_classic()+
+  geom_text(x=-4, y=70, label=paste("Down \n",Up_genes,sep=""),color="black",size=2)+
+  geom_text(x=4, y=70, label=paste("Up \n",Down_genes,sep=""),color="black",size=2)+
+  geom_text_repel(data = sig_up_genes, # Add labels last to appear as the top layer  
+                  aes(label = Gene_Sym),
+                  size=2,
+                  nudge_y = 1,
+                  nudge_x = -2,
+                  color="black")+
+  geom_point(data = sig_up_genes,shape = 21,alpha=1, fill = "#D5732E",colour = "black")+
+  theme(legend.position = "none",
+        axis.text=element_text(size=6, color="black"), 
+        axis.title = element_text(size=8, color="black"),
+        panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank(),
+        legend.background = element_blank())
+volcano
+ggsave("Figures/Pan_DESEQ_Volcano.png",width=1.5,height=1.5)
+
+
+#
+up <-enrichGO(gene          = res_df$Genes[which(res_df$gene_type=="up")],
+                 OrgDb         = org.Hs.eg.db,
+                 keyType       = 'ENSEMBL',
+                 ont           = "BP",
+                 pAdjustMethod = "BH",
+                 universe     = res_df$Genes,
+                 pvalueCutoff  = 0.05,
+                 qvalueCutoff  = 0.05)
+
+up@result<-up@result[which(up@result$ID %in% c("GO:0090132","GO:0001667","GO:0030198","GO:0098742")),]
+dotplot(up,font.size = 8)+
+  scale_size_area(max_size = 3)+
+  theme_classic()+
+  theme(legend.position = "right",
+        axis.text=element_text(size=8, color="black"),
+        axis.text.x=element_text(size=8, color="black"),
+        axis.title = element_text(size=8, color="black"),
+        panel.background = element_blank(),
+        plot.background = element_blank(), 
+        legend.background = element_blank(),
+        legend.key.size = unit(0.3, "cm"))
+ggsave("Figures/Panc_GO_up.pdf",width=4,height=2)
+```
+
+#GSEA-Panc
+```{r}
+rm(list=ls())
+GSEA_Pos<-read.table("gsea_report_for_na_pos_1691179573388.tsv",sep="\t",header=T)
+GSEA_Neg<-read.table("gsea_report_for_na_neg_1691179573388.tsv",sep="\t",header=T)
+df<-rbind(GSEA_Pos,GSEA_Neg)
+df$NAME=gsub("HALLMARK_","",df$NAME)
+df$NAME[which(df$NAME=="EPITHELIAL_MESENCHYMAL_TRANSITION")]<-"EMT"
+df$color<-"grey"
+df$color[which(df$FDR.q.val<0.05 & df$NES>0)]<-"#C23D69"
+df$color[which(df$FDR.q.val<0.05 & df$NES<0)]<-"#20A4F3"
+
+sig_genes <- df %>%
+  dplyr::filter(NAME %in% c("G2M_CHECKPOINT","EMT","KRAS_SIGNALING_DN"))
+sig_genes$NAME=gsub("_","\n",sig_genes$NAME)
+
+ggplot(df, aes(NES, -log10(FDR.q.val))) + 
+  geom_point(aes(col=color)) + 
+  scale_color_identity()+
+  coord_cartesian(xlim = c(-7, 7)) +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed",color="gray") +
+  geom_vline(xintercept = c(-1, 1), linetype = "dashed",color="gray") +
+  geom_point(data = sig_genes,shape = 21,alpha=1,colour = "black")+
+  geom_text_repel(data = sig_genes[which(sig_genes$NES>0),], 
+                  aes(label = NAME),
+                  force = 1,
+                  size=1.5,
+                  nudge_y =0,
+                  nudge_x = 5)+
+  geom_text_repel(data = sig_genes[which(sig_genes$NES<0),], 
+                  aes(label = NAME),
+                  force = 1,
+                  size=1.5,
+                  nudge_y = 0.5,
+                  nudge_x = -2)+
+  labs(x="NES", y="-log10 FDR") +
+  theme_classic() +
+  theme(axis.text=element_text(size=6, color="black"), 
+        axis.title = element_text(size=8, color="black"),
+        panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank())
+ggsave("Figures/GSEA_Pan.pdf",width=1.5,height=1.5)
+```
+
+#Gene Expression Volcano-Ov
+```{r}
+rm(list=ls())
+res_df<-read.table("sh_vs_ctrl_Ov.txt",header=T)
+
+##Volcano Plot
+cols <- c("up" = "#C23D69", "down" = "#20A4F3", "ns" = "grey") 
+sizes <- c("up" = 0.75, "down" = 0.75, "ns" = 0.25) 
+alphas <- c("up" = 1, "down" = 1, "ns" = 0.5)
+
+sig_up_genes <- res_df %>%
+  dplyr::filter(Genes %in% c("ENSG00000119953"))
+
+Up_genes<-as.character(length(which(res_df$gene_type=="up")))
+Down_genes<-as.character(length(which(res_df$gene_type=="down")))
+
+volcano<-res_df %>%
+  ggplot(aes(x = log2FoldChange,
+             y = -log10(padj),
+             fill = gene_type,
+             color=gene_type,
+             size = gene_type,
+             alpha =gene_type)) + 
+  geom_point(shape = 21) +
+  geom_hline(yintercept = -log10(0.05),
+             linetype = "dashed") + 
+  geom_vline(xintercept = c(log2(0.5), log2(2)),
+             linetype = "dashed")+
+  scale_fill_manual(values = cols) + # Modify point colour
+  scale_color_manual(values = cols) + # Modify point colour
+  scale_size_manual(values = sizes) + # Modify point size
+  scale_alpha_manual(values = alphas) + # Modify point transparency
+  scale_x_continuous(breaks = c(-4,-2,-0,2,4),       
+                     limits = c(-5.5, 5.5))+
+  theme_classic()+
+  geom_text(x=-4, y=200, label=paste("Down \n",Up_genes,sep=""),color="black",size=2)+
+  geom_text(x=4, y=200, label=paste("Up \n",Down_genes,sep=""),color="black",size=2)+
+  geom_text_repel(data = sig_up_genes, # Add labels last to appear as the top layer  
+                  aes(label = Gene_Sym),
+                  size=2,
+                  nudge_y = 1,
+                  nudge_x = -2,
+                  color="black")+
+  geom_point(data = sig_up_genes,shape = 21,alpha=1, fill = "#D5732E",colour = "black")+
+  theme(legend.position = "none",
+        axis.text=element_text(size=6, color="black"), 
+        axis.title = element_text(size=8, color="black"),
+        panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank(),
+        legend.background = element_blank())
+volcano
+ggsave("Figures/Ov_DESEQ_Volcano.png",width=1.5,height=1.5)
+
+
+#
+up <-enrichGO(gene          = res_df$Genes[which(res_df$gene_type=="up")],
+                 OrgDb         = org.Hs.eg.db,
+                 keyType       = 'ENSEMBL',
+                 ont           = "BP",
+                 pAdjustMethod = "BH",
+                 universe     = res_df$Genes,
+                 pvalueCutoff  = 0.05,
+                 qvalueCutoff  = 0.05)
+
+up@result<-up@result[which(up@result$ID %in% c("GO:0001525","GO:0022407","GO:0032944")),]
+dotplot(up,font.size = 8)+
+  scale_size_area(max_size = 3)+
+  theme_classic()+
+  theme(legend.position = "right",
+        axis.text=element_text(size=8, color="black"),
+        axis.text.x=element_text(size=8, color="black"),
+        axis.title = element_text(size=8, color="black"),
+        panel.background = element_blank(),
+        plot.background = element_blank(), 
+        legend.background = element_blank(),
+        legend.key.size = unit(0.3, "cm"))
+ggsave("Figures/Ov_GO_up.pdf",width=4,height=2)
+```
+
+#GSEA-Ov
+```{r}
+rm(list=ls())
+GSEA_Pos<-read.table("gsea_report_for_na_pos_1691179517599.tsv",sep="\t",header=T)
+GSEA_Neg<-read.table("gsea_report_for_na_neg_1691179517599.tsv",sep="\t",header=T)
+df<-rbind(GSEA_Pos,GSEA_Neg)
+df$NAME=gsub("HALLMARK_","",df$NAME)
+df$NAME[which(df$NAME=="EPITHELIAL_MESENCHYMAL_TRANSITION")]<-"EMT"
+df$color<-"grey"
+df$color[which(df$FDR.q.val<0.05 & df$NES>0)]<-"#C23D69"
+df$color[which(df$FDR.q.val<0.05 & df$NES<0)]<-"#20A4F3"
+
+sig_genes <- df %>%
+  dplyr::filter(NAME %in% c("EMT","TGF_BETA_SIGNALING","KRAS_SIGNALING_UP"))
+sig_genes$NAME=gsub("_","\n",sig_genes$NAME)
+
+ggplot(df, aes(NES, -log10(FDR.q.val))) + 
+  geom_point(aes(col=color)) + 
+  scale_color_identity()+
+  coord_cartesian(xlim = c(-2, 10)) +
+  geom_vline(xintercept = 0) +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed",color="gray") +
+  geom_vline(xintercept = c(-1, 1), linetype = "dashed",color="gray") +
+  geom_point(data = sig_genes,shape = 21,alpha=1,colour = "black")+
+  geom_text_repel(data = sig_genes[which(sig_genes$NES>0),], 
+                  aes(label = NAME),
+                  force = 1,
+                  size=1.5,
+                  nudge_y =0,
+                  nudge_x = 5)+
+  geom_text_repel(data = sig_genes[which(sig_genes$NES<0),], 
+                  aes(label = NAME),
+                  force = 1,
+                  size=1.5,
+                  nudge_y = 0.5,
+                  nudge_x = -2)+
+  labs(x="NES", y="-log10 FDR") +
+  theme_classic() +
+  theme(axis.text=element_text(size=6, color="black"), 
+        axis.title = element_text(size=8, color="black"),
+        panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank())
+ggsave("Figures/GSEA_Ov.pdf",width=1.5,height=1.5)
+```
+
+#GSEA plot
+```{r,fig.width=2,fig.height=1.5}
+rm(list=ls())
+rnk<-read.table("Pan_GSEA_Sorted.rnk")
+geneList <- rnk[,2]
+names(geneList) <- rnk[,1]
+geneList <- sort(geneList, decreasing = TRUE)
+gmt <- read.gmt("ancreatic_DESEQ.GseaPreranked.1691179573388/edb/gene_sets.gmt")
+
+gsea_res <- GSEA(geneList = geneList,TERM2GENE = gmt,pvalueCutoff = .05,verbose = FALSE)
+
+m<-gseaplot2(gsea_res,geneSetID = "HALLMARK_KRAS_SIGNALING_DN",pvalue_table = F,
+          base_size = 4,rel_heights = c(1.2, 0.2, 0.4),
+          color="#C23D69",ES_geom="dot")
+ggsave("GSEA_KRAS.pdf",m,height=1.5,width=2)
+```
+
+#Splicing Bar plot-Panc
+```{r}
+rm(list=ls())
+Pancreatic_Events<-read.table("All_Events_Pan.txt",header=T)
+Ovarian_Events<-read.table("All_Events_Ov.txt",header=T)
+
+#Getting the Significant Events
+Pancreatic_Events_Sig<-Pancreatic_Events[which(Pancreatic_Events$Total_Count_1>=30 & Pancreatic_Events$Total_Count_2>=30 & 
+                                                 Pancreatic_Events$PValue<0.05 & Pancreatic_Events$FDR<0.05),]
+  
+Ovarian_Events_Sig<-Ovarian_Events[which(Ovarian_Events$Total_Count_1>=30 & Ovarian_Events$Total_Count_2>=30 &
+                                           Ovarian_Events$PValue<0.05 & Ovarian_Events$FDR<0.05),]
+
+#Making a BarPplot with the Proportion of Significant Events in both cell line
+Event_Count_Pan<-data.frame(table(Pancreatic_Events_Sig$column_label),"PDAC")
+Event_Count_Ov<-data.frame(table(Ovarian_Events_Sig$column_label),"HGSOC")
+colnames(Event_Count_Pan)<-c("Event","Count","Sample")
+colnames(Event_Count_Ov)<-c("Event","Count","Sample")
+Event_Counts<-rbind(Event_Count_Pan,Event_Count_Ov)
+Event_Counts$Event<-as.character(Event_Counts$Event)
+Event_Counts$Event[which(Event_Counts$Event=="SE")]<-"CE"
+Event_Counts$Event<-factor(Event_Counts$Event,levels=c("CE","A5SS","A3SS","MXE","RI"))
+
+library(ggplot2)
+ggplot(Event_Counts,aes(x=Event,y=Count,fill=Sample))+
+  geom_bar(stat="identity", position="dodge",fill="#8AA54E",width=.8)+
+  coord_flip()+
+  labs(x="",y="# of Events")+
+  theme_classic()+
+  theme(legend.position =c(0.85, .75),
+        legend.text=element_text(size=5),
+        legend.title=element_text(size=6),
+        axis.text=element_text(size=6, color="black"), 
+        axis.title = element_text(size=6, color="black"),
+        panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank(),
+        legend.background = element_blank())+
+  guides(fill=guide_legend(title="Cancer Type"))+
+  theme(legend.key.size = unit(0.3, 'cm'))
+
+ggsave("Figures/Common_Events_Distribution_Panc.pdf",width=1.8,height=1.5)
+```
+
+#Splicing Bar plot-Ov
+```{r}
+rm(list=ls())
+Pancreatic_Events<-read.table("All_Events_Pan.txt",header=T)
+Ovarian_Events<-read.table("/All_Events_Ov.txt",header=T)
+
+#Getting the Significant Events
+Pancreatic_Events_Sig<-Pancreatic_Events[which(Pancreatic_Events$Total_Count_1>=30 & Pancreatic_Events$Total_Count_2>=30 & 
+                                                 Pancreatic_Events$PValue<0.05 & Pancreatic_Events$FDR<0.05),]
+  
+Ovarian_Events_Sig<-Ovarian_Events[which(Ovarian_Events$Total_Count_1>=30 & Ovarian_Events$Total_Count_2>=30 &
+                                           Ovarian_Events$PValue<0.05 & Ovarian_Events$FDR<0.05),]
+
+#Making a Barplot with the Proportion of Significant Events in both cell line
+Event_Count_Pan<-data.frame(table(Pancreatic_Events_Sig$column_label),"PDAC")
+Event_Count_Ov<-data.frame(table(Ovarian_Events_Sig$column_label),"HGSOC")
+colnames(Event_Count_Pan)<-c("Event","Count","Sample")
+colnames(Event_Count_Ov)<-c("Event","Count","Sample")
+Event_Counts<-rbind(Event_Count_Pan,Event_Count_Ov)
+Event_Counts$Event<-as.character(Event_Counts$Event)
+Event_Counts$Event[which(Event_Counts$Event=="SE")]<-"CE"
+Event_Counts$Event<-factor(Event_Counts$Event,levels=c("CE","A5SS","A3SS","MXE","RI"))
+Event_Counts<-Event_Counts[which(Event_Counts$Sample=="HGSOC"),]
+
+library(ggplot2)
+ggplot(Event_Counts,aes(x=Event,y=Count,fill=Sample))+
+  geom_bar(stat="identity", position="dodge",fill="#BE733E",width=.8)+
+  labs(x="",y="# of Events")+
+  theme_classic()+
+  theme(legend.position =c(0.85, .75),
+        legend.text=element_text(size=5),
+        legend.title=element_text(size=6),
+        axis.text=element_text(size=6, color="black"), 
+        axis.title = element_text(size=6, color="black"),
+        panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank(),
+        legend.background = element_blank())+
+  guides(fill=guide_legend(title="Cancer Type"))+
+  theme(legend.key.size = unit(0.3, 'cm'))
+
+ggsave("Figures/Common_Events_Distribution_Ov.pdf",width=1.8,height=1.5)
+```
+
+#Splicing Bar plot
+```{r,fig.width=1.5,fig.height=1.5}
+rm(list=ls())
+Pancreatic_Events<-read.table("All_Events_Pan.txt",header=T)
+Ovarian_Events<-read.table("All_Events_Ov.txt",header=T)
+
+#Getting the Significant Events
+Pancreatic_Events_Sig<-Pancreatic_Events[which(Pancreatic_Events$Total_Count_1>=30 & Pancreatic_Events$Total_Count_2>=30 & 
+                                                 Pancreatic_Events$PValue<0.05 & Pancreatic_Events$FDR<0.05),]
+  
+Ovarian_Events_Sig<-Ovarian_Events[which(Ovarian_Events$Total_Count_1>=30 & Ovarian_Events$Total_Count_2>=30 &
+                                           Ovarian_Events$PValue<0.05 & Ovarian_Events$FDR<0.05),]
+
+#Making a BarPplot with the Proportion of Significant Events in both cell line
+Event_Count_Pan<-data.frame(table(Pancreatic_Events_Sig$column_label),"PDAC")
+Event_Count_Ov<-data.frame(table(Ovarian_Events_Sig$column_label),"HGSOC")
+colnames(Event_Count_Pan)<-c("Event","Count","Sample")
+colnames(Event_Count_Ov)<-c("Event","Count","Sample")
+Event_Counts<-rbind(Event_Count_Pan,Event_Count_Ov)
+Event_Counts$Event<-as.character(Event_Counts$Event)
+Event_Counts$Event[which(Event_Counts$Event=="SE")]<-"CE"
+Event_Counts$Event<-factor(Event_Counts$Event,levels=c("CE","RI","MXE","A5SS","A3SS"))
+Event_Counts$Sample<-factor(Event_Counts$Sample,levels=c("PDAC","HGSOC"))
+
+library(ggplot2)
+ggplot(Event_Counts,aes(x=Event,y=Count,fill=Sample))+
+  geom_bar(stat="identity", position="dodge",width=.8)+
+  labs(x="",y="# of Events")+
+  coord_flip()+
+  theme_classic()+
+  scale_fill_manual(values = c(PDAC="#DFA06E",HGSOC="#5B9CAE"))+
+  #coord_flip()+
+  theme(legend.position =c(0.85, .85),
+        legend.text=element_text(size=5),
+        legend.title=element_blank(),
+        axis.text=element_text(size=6, color="black"), 
+        axis.title = element_text(size=6, color="black"),
+        panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank(),
+        legend.background = element_blank())+
+  guides(fill=guide_legend(title="Cancer Type"))+
+  theme(legend.key.size = unit(0.3, 'cm'))
+
+ggsave("Figures/Common_Events_Distribution.pdf",width=1.5,height=1.5)
+```
+
+#PSI Correlation
+```{r}
+rm(list=ls())
+Pancreatic_Events<-read.table("All_Events_Pan.txt",header=T)
+Ovarian_Events<-read.table("All_Events_Ov.txt",header=T)
+
+#Getting the Significant Events
+Pancreatic_Events_Sig<-Pancreatic_Events[which(Pancreatic_Events$Total_Count_1>=30 & Pancreatic_Events$Total_Count_2>=30 & 
+                                                 Pancreatic_Events$PValue<0.05 & Pancreatic_Events$FDR<0.05),]
+  
+Ovarian_Events_Sig<-Ovarian_Events[which(Ovarian_Events$Total_Count_1>=30 & Ovarian_Events$Total_Count_2>=30 &
+                                           Ovarian_Events$PValue<0.05 & Ovarian_Events$FDR<0.05),]
+
+Events_in_Both<-intersect(Pancreatic_Events_Sig$Identifier,Ovarian_Events_Sig$Identifier)
+
+#Getting Values
+Common_Events<-merge(Pancreatic_Events_Sig[c("Identifier","IncLevelDifference")],Ovarian_Events_Sig[c("Identifier","IncLevelDifference")],by="Identifier")
+colnames(Common_Events)<-c("Identifier","Pan","Ov")
+Common_Events$Color<-"#C0BFBF"
+Common_Events$Color[which(Common_Events$Pan>0 & Common_Events$Ov>0)]<-"#C23D69"
+Common_Events$Color[which(Common_Events$Pan<0 & Common_Events$Ov<0)]<-"#20A4F3"
+SE<-Common_Events[which(sapply(Common_Events$Identifier,function(x){strsplit(x,"_")[[1]][1]})=="SE"),]
+  
+sig_up_genes <- SE %>%
+  dplyr::filter(Identifier %in% c("SE_ENSG00000102882_MAPK3_chr16:30118098-30118163_30117669-30117784_30118348-30118538_-",
+                                  "SE_ENSG00000196712_NF1_chr17:31252937-31253000_31248983-31249119_31258343-31258502_+"))
+
+ggplot(SE,aes(x = Pan,y = Ov,color=Color,fill = Color))+
+  geom_point(shape = 21,alpha=0.5)+
+  scale_fill_identity()+
+  scale_colour_identity()+
+  labs(x="dPSI PDAC (Ctrl-KD)",y="dPSI HGSOC (Ctrl-KD)")+
+  geom_point(data = sig_up_genes,shape = 21,alpha=1, fill = "#D5732E",colour = "black")+
+  geom_text_repel(data = sig_up_genes,aes(label = c("italic('MAPK3')","italic('NF1')")),force = 2,nudge_x = -0.25,nudge_y = 0.1,colour = "black",size=2,parse = TRUE)+
+  geom_text(data = sig_up_genes,aes(label = c("(ERK1)","")),force = 2,nudge_x = -0.25,nudge_y = 0.02,colour = "black",size=2,parse = TRUE)+
+  theme_classic()+
+  theme(axis.text=element_text(size=6, color="black"), 
+        axis.title = element_text(size=8, color="black"),
+        panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank(),
+        legend.background = element_blank())+
+  theme(legend.key.size = unit(1, 'cm'))
+ggsave("Figures/2B_Common_SE_Events_PSI.pdf",width=1.5,height=1.5)
+
+ggplot(Common_Events[which(sapply(Common_Events$Identifier,function(x){strsplit(x,"_")[[1]][1]})=="RI"),],aes(x = Pan,y = Ov,color=Color,fill = Color))+
+  geom_point(shape = 21,alpha=0.5)+
+  scale_fill_identity()+
+  scale_colour_identity()+
+  labs(x="dPSI PDAC (Ctrl-KD)",y="dPSI OvCa (Ctrl-KD)")+
+  #geom_point(data = sig_up_genes,shape = 21,alpha=1, fill = "#D5732E",colour = "black")+
+  #geom_text_repel(data = sig_up_genes,aes(label = "MapK3\n(ERK1)"),force = 2,nudge_x = -0.2,nudge_y = 0.1,colour = "black",size=2)+
+  theme_classic()+
+  theme(axis.text=element_text(size=6, color="black"), 
+        axis.title = element_text(size=8, color="black"),
+        panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank(),
+        legend.background = element_blank())+
+  theme(legend.key.size = unit(1, 'cm'))
+ggsave("Figures/Common_RI_Events_PSI.pdf",width=1.5,height=1.5)
+```
+
+#Overlap Between AS Skipped Exons Events
+```{r}
+rm(list=ls())
+Pancreatic_Events<-read.table("All_Events_Pan.txt",header=T)
+Ovarian_Events<-read.table("All_Events_Ov.txt",header=T)
+
+#Getting the Significant Events
+Pancreatic_Events<-Pancreatic_Events[which(Pancreatic_Events$Total_Count_1>=30 & Pancreatic_Events$Total_Count_2>=30 & 
+                                                 Pancreatic_Events$PValue<0.05 & Pancreatic_Events$FDR<0.05),]
+  
+Ovarian_Events<-Ovarian_Events[which(Ovarian_Events$Total_Count_1>=30 & Ovarian_Events$Total_Count_2>=30 &
+                                           Ovarian_Events$PValue<0.05 & Ovarian_Events$FDR<0.05),]
+
+#Making a list of SE Genes
+CE<-list("PDAC"=Pancreatic_Events$Identifier[which(Pancreatic_Events$column_label=="SE")],
+         "HGSOC"=Ovarian_Events$Identifier[which(Ovarian_Events$column_label=="SE")])
+
+ggvenn::ggvenn(CE,fill_color=c("#DFA06E","#5B9CAE"),set_name_size=3,show_percentage=F,text_size=3,fill_alpha=0.5,stroke_size=0.5)+
+  coord_cartesian(ylim = c(-1.2, 1.5))+
+  theme(legend.position = "none",
+        panel.background = element_blank(),
+        plot.background = element_blank(),
+        panel.border = element_blank(),
+        legend.background = element_blank(),
+        axis.title = element_text(family="Arial",size=0, color="black"),
+        axis.text=element_text(family="Arial",size=0, color="black"))
+ggsave("Figures/CE_Overlap.pdf",width=1.5,height=1.25)
+
+#Calcualting significance
+Pancreatic_Events<-read.table("All_Events_Pan.txt",header=T)
+Ovarian_Events<-read.table("All_Events_Ov.txt",header=T)
+
+Pancreatic_Events<-Pancreatic_Events[which(Pancreatic_Events$column_label=="SE"),]
+Ovarian_Events<-Ovarian_Events[which(Ovarian_Events$column_label=="SE"),]
+
+#Getting the Significant Events
+Pancreatic_Events_sig<-Pancreatic_Events[which(Pancreatic_Events$Total_Count_1>=30 & Pancreatic_Events$Total_Count_2>=30 & 
+                                                 Pancreatic_Events$PValue<0.05 & Pancreatic_Events$FDR<0.05),]
+  
+Ovarian_Events_sig<-Ovarian_Events[which(Ovarian_Events$Total_Count_1>=30 & Ovarian_Events$Total_Count_2>=30 &
+                                           Ovarian_Events$PValue<0.05 & Ovarian_Events$FDR<0.05),]
+
+ov<-length(intersect(Pancreatic_Events_sig$Identifier,Ovarian_Events_sig$Identifier))
+gene_set_1<-length(Pancreatic_Events_sig$Identifier)
+universe<-length(unique(c(Pancreatic_Events$Identifier,Ovarian_Events$Identifier)))
+gene_set_2<-length(unique(Ovarian_Events_sig$Identifier))
+
+phyper(ov-1,gene_set_1,universe-gene_set_1,gene_set_2,lower.tail=F)
+
+
+```
+
+#Overlap Between AS Retained Introns Events
+```{r}
+rm(list=ls())
+getwd()
+Pancreatic_Events<-read.table("All_Events_Pan.txt",header=T)
+Ovarian_Events<-read.table("All_Events_Ov.txt",header=T)
+
+#Getting the Significant Events
+Pancreatic_Events<-Pancreatic_Events[which(Pancreatic_Events$Total_Count_1>=30 & Pancreatic_Events$Total_Count_2>=30 & 
+                                                 Pancreatic_Events$PValue<0.05 & Pancreatic_Events$FDR<0.05),]
+  
+Ovarian_Events<-Ovarian_Events[which(Ovarian_Events$Total_Count_1>=30 & Ovarian_Events$Total_Count_2>=30 &
+                                           Ovarian_Events$PValue<0.05 & Ovarian_Events$FDR<0.05),]
+
+#Making a list of SE Genes
+RI<-list("PDAC"=Pancreatic_Events$Identifier[which(Pancreatic_Events$column_label=="RI")],"HGSOC"=Ovarian_Events$Identifier[which(Ovarian_Events$column_label=="RI")])
+
+ggvenn::ggvenn(RI,fill_color=c("#DFA06E","#5B9CAE"),set_name_size=3,show_percentage=F,text_size=3,fill_alpha=0.5,stroke_size=0.5)+
+  coord_cartesian(ylim = c(-1.2, 1.5))+
+  theme(legend.position = "none",
+        panel.background = element_blank(),
+        plot.background = element_blank(),
+        panel.border = element_blank(),
+        legend.background = element_blank(),
+        axis.title = element_text(family="Arial",size=0, color="black"),
+        axis.text=element_text(family="Arial",size=0, color="black"))
+ggsave("Figures/2C_RI_Overlap.pdf",width=1.5,height=1.25)
+
+
+
+#Calcualting significance
+Pancreatic_Events<-read.table("All_Events_Pan.txt",header=T)
+Ovarian_Events<-read.table("All_Events_Ov.txt",header=T)
+
+
+Pancreatic_Events<-Pancreatic_Events[which(Pancreatic_Events$column_label=="RI"),]
+Ovarian_Events<-Ovarian_Events[which(Ovarian_Events$column_label=="RI"),]
+
+#Getting the Significant Events
+Pancreatic_Events_sig<-Pancreatic_Events[which(Pancreatic_Events$Total_Count_1>=30 & Pancreatic_Events$Total_Count_2>=30 & 
+                                                 Pancreatic_Events$PValue<0.05 & Pancreatic_Events$FDR<0.05),]
+  
+Ovarian_Events_sig<-Ovarian_Events[which(Ovarian_Events$Total_Count_1>=30 & Ovarian_Events$Total_Count_2>=30 &
+                                           Ovarian_Events$PValue<0.05 & Ovarian_Events$FDR<0.05),]
+
+ov<-length(intersect(Pancreatic_Events_sig$Identifier,Ovarian_Events_sig$Identifier))
+gene_set_1<-length(Pancreatic_Events_sig$Identifier)
+universe<-length(unique(c(Pancreatic_Events$Identifier,Ovarian_Events$Identifier)))
+gene_set_2<-length(unique(Ovarian_Events_sig$Identifier))
+
+phyper(ov-1,gene_set_1,universe-gene_set_1,gene_set_2,lower.tail=F)
+```
+
+#Peak level overlap-Slide4
+```{r}
+rm(list=ls())
+Gene<-read.table("Skipper/Peaks/SMNDC1_Gene.reproducible_enriched_windows.tsv",header=T)
+Tag<-read.table("Skipper/Peaks/SMNDC1_Tag.reproducible_enriched_windows.tsv",header=T)
+
+Gene<-Gene[which(Gene$q_min<0.05 & Gene$p_min<0.05 & Gene$enrichment_l2or_mean>1),]
+Tag<-Tag[which(Tag$q_min<0.05 & Tag$p_min<0.05 & Tag$enrichment_l2or_mean>1),]
+
+Gene_gr<-makeGRangesFromDataFrame(Gene,seqnames.field = "chr",start.field = "start",end.field = "end",strand.field = "strand")
+Tag_gr<-makeGRangesFromDataFrame(Tag,seqnames.field = "chr",start.field = "start",end.field = "end",strand.field = "strand")
+
+Gene_gr<-reduce(Gene_gr)
+Tag_gr<-reduce(Tag_gr)
+
+ov<-findOverlaps(Gene_gr,Tag_gr)
+overlapped<-reduce(c(Gene_gr[queryHits(ov)],Tag_gr[subjectHits(ov)]))
+gene_unique<-Gene_gr[-unique(queryHits(ov))]
+tag_unique<-Tag_gr[-unique(subjectHits(ov))]
+
+
+SE<-list("Anti-\nSMNDC1"=c(paste0("A",1:length(overlapped)),paste0("B",1:length(gene_unique))),"Anti-\nHA"=c(paste0("A",1:length(overlapped)),paste0("C",1:length(tag_unique))))
+
+v<-ggvenn::ggvenn(SE,fill_color=c("#936F9B","#FFAAAA"),set_name_size=0,show_percentage=F,text_size=3,fill_alpha=0.9,stroke_size=0.5)+
+  coord_cartesian(xlim = c(-1, 1.5), clip = "off")+
+  coord_flip() +
+  scale_x_reverse()+
+  theme(legend.position = "none",
+        panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank(),
+        legend.background = element_blank(),
+        axis.title = element_text(family="Arial",size=0, color="black"),
+        axis.text=element_text(family="Arial",size=0, color="black"),
+        text=element_text(family="Arial", size=0,color="black"))
+v
+ggsave("Figures/Binding_Regions_peaks.pdf",height=1.5,width=1.1)
+
+```
+
+#Gene level overlap-Slide3
+```{r}
+rm(list=ls())
+Gene<-read.table("Skipper/Peaks/SMNDC1_Gene.reproducible_enriched_windows.tsv",header=T)
+Tag<-read.table("Skipper/Peaks/SMNDC1_Tag.reproducible_enriched_windows.tsv",header=T)
+
+Gene<-Gene[which(Gene$q_min<0.05 & Gene$p_min<0.05 & Gene$enrichment_l2or_mean>1),]
+Tag<-Tag[which(Tag$q_min<0.05 & Tag$p_min<0.05 & Tag$enrichment_l2or_mean>1),]
+
+Gene<-Gene[which(Gene$gene_name=="NF1"),]
+Tag<-Tag[which(Tag$gene_name=="NF1"),]
+
+
+SE<-list("Anti-\nSMNDC1"=Gene$gene_name,"Anti-\nHA"=Tag$gene_name)
+
+v<-ggvenn::ggvenn(SE,fill_color=c("#936F9B","#FFAAAA"),set_name_size=0,show_percentage=F,text_size=3,fill_alpha=0.8,stroke_size=0.5)+
+  coord_cartesian(xlim = c(-1, 1.5), clip = "off")+
+  coord_flip() +
+  scale_x_reverse()+
+  theme(legend.position = "none",
+        panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank(),
+        legend.background = element_blank(),
+        axis.title = element_text(family="Arial",size=0, color="black"),
+        axis.text=element_text(family="Arial",size=0, color="black"),
+        text=element_text(family="Arial", size=0,color="black"))
+v
+ggsave("Figures/Binding_Regions_genes.pdf",height=1.5,width=1.1)
+
+
+```
+
+#Region combined
+```{r,fig.width=3,fig.height=3}
+rm(list=ls())
+Gene<-read.table("Skipper/Peaks/SMNDC1_Gene.reproducible_enriched_windows.tsv",header=T)
+Tag<-read.table("Skipper/Peaks/SMNDC1_Tag.reproducible_enriched_windows.tsv",header=T)
+
+Gene<-Gene[which(Gene$q_min<0.05 & Gene$p_min<0.05 & Gene$enrichment_l2or_mean>1),]
+Tag<-Tag[which(Tag$q_min<0.05 & Tag$p_min<0.05 & Tag$enrichment_l2or_mean>1),]
+
+Gene_gr<-makeGRangesFromDataFrame(Gene,seqnames.field = "chr",start.field = "start",end.field = "end",
+                                  strand.field = "strand",keep.extra.columns = T)
+
+Tag_gr<-makeGRangesFromDataFrame(Tag,seqnames.field = "chr",start.field = "start",end.field = "end",
+                                  strand.field = "strand",keep.extra.columns = T)
+
+ov<-findOverlaps(Gene_gr,Tag_gr)
+Gene_ov<-Gene_gr[unique(queryHits(ov)),] %>% data.frame()
+Gene_ov$feature_type_top<-sapply(Gene_ov$feature_type_top,function(x){strsplit(x,"_")[[1]][1]})
+
+Regions<-table(Gene_ov$feature_type_top) %>% data.frame()
+Regions$fraction = Regions$Freq / sum(Regions$Freq)
+Regions$ymax = cumsum(Regions$fraction)
+Regions$ymin = c(0, head(Regions$ymax, n = -1))
+Regions$label_position = (Regions$ymax + Regions$ymin) / 2  # For text positioning
+Regions$Label<-paste(Regions$Var1,"=",Regions$Freq,sep="")
+my_colors<-c("CDS"="#5AAC56","INTRON"="#4356A1","EXON"="#EFB143","PRIMIRNA"="gray","SS3"="#C7639C","SS5"="#7A5DA0",
+       "UTR3"="#42824F","UTR5"="#98C357","SSB"="#FFB6C1")
+
+
+ggplot(Regions, aes(ymax = ymax, ymin = ymin, xmax = 1, xmin = 0, fill = Var1)) +
+  geom_rect(alpha=.9) +
+  coord_polar(theta = "y") +
+  theme_void() +
+  scale_fill_manual(values = my_colors) + 
+  geom_label_repel(aes(x = 1, y = label_position, label = Label), max.overlaps = Inf,
+                  size = 3.5,force = 1,min.segment.length = 0,fill = scales::alpha("white", 0.6)) +
+  theme(legend.position = "none")
+ggsave("Figures/Ov_peak_regions.pdf",height=3,width=3)
+
+```
+
+#Region bar plot
+```{r,fig.height=1.5,fig.width=1.5}
+rm(list=ls())
+Gene<-read.table("Skipper/Peaks/SMNDC1_Gene.reproducible_enriched_windows.tsv",header=T)
+Tag<-read.table("Skipper/Peaks/SMNDC1_Tag.reproducible_enriched_windows.tsv",header=T)
+
+Gene<-Gene[which(Gene$q_min<0.05 & Gene$p_min<0.05 & Gene$enrichment_l2or_mean>1),]
+Tag<-Tag[which(Tag$q_min<0.05 & Tag$p_min<0.05 & Tag$enrichment_l2or_mean>1),]
+
+Gene$groups<-"Anti-SMNDC1"
+Tag$groups<-"Anti-HA"
+df<-rbind(Gene,Tag)
+df$feature_type_top<-sapply(df$feature_type_top,function(x){strsplit(x,"_")[[1]][1]})
+
+comb<-df[c("groups","feature_type_top")] %>% gather(groups, feature_type_top) %>% dplyr::count(groups, feature_type_top)
+comb$feature_type_top[which(comb$feature_type_top=="PRIMIRNA")]<-"OTHER"
+comb$feature_type_top<-factor(comb$feature_type_top,levels=c("CDS","UTR3","UTR5","SS5","SS3","SSB","INTRON","EXON","OTHER"))
+comb$groups<-factor(comb$groups,levels=c("Anti-SMNDC1","Anti-HA"))
+
+cls<-c("CDS"="#5AAC56","INTRON"="#4356A1","EXON"="#EFB143","OTHER"="gray","SS3"="#C7639C","SS5"="#7A5DA0",
+       "UTR3"="#42824F","UTR5"="#98C357","SSB"="#FFB6C1")
+
+g<-ggplot(comb,aes(x=groups,y=n,fill=feature_type_top))+
+  geom_bar(position = "fill",stat = "identity",width=.75,size=1) +
+  scale_y_continuous(labels = scales::percent_format())+
+  scale_fill_manual(values =cls)+
+  theme_classic()+
+  labs(x="",y="% of peaks")+
+  theme(legend.position = "none",
+        axis.text.y=element_text(size=6, color="black"),
+        axis.text.x=element_text(size=6, color="black"),
+        axis.title = element_text(size=6, color="black"),
+        legend.text = element_text(size=6, color="black"),
+        panel.background = element_blank(),
+        legend.title = element_blank(),
+        plot.background = element_blank(), 
+        panel.border = element_blank(),
+        legend.background = element_blank(),
+        legend.key.height= unit(0.5, 'cm'),
+        legend.key.width= unit(0.5, 'cm'))
+
+ggsave("Figures/Binding_Regions.pdf",g,height=1.5,width=1.5)
+
+
+g2<-g+theme(legend.position = "right")
+g2<-cowplot::get_legend(g2)
+ggsave("Figures/Binding_Regions_Legend.pdf",g2,height=2,width=1.5)
+
+
+```
+
+
+#Gene Ontology
+```{r}
+rm(list=ls())
+Gene<-read.table("Skipper/Peaks/SMNDC1_Gene.reproducible_enriched_windows.tsv",header=T)
+Tag<-read.table("Skipper/Peaks/SMNDC1_Tag.reproducible_enriched_windows.tsv",header=T)
+
+Gene_sub<-Gene[which(Gene$q_min<0.05 & Gene$p_min<0.05 & Gene$enrichment_l2or_mean>1),]
+Tag_sub<-Tag[which(Tag$q_min<0.05 & Tag$p_min<0.05 & Tag$enrichment_l2or_mean>1),]
+
+res_df<-read.table("~/Desktop/Dominguez_Lab/SMNDC1-final/Round1/Summary_Files/sh_vs_ctrl_Pan.txt",header=T)
+
+Gene_go<-enrichGO(gene          = Gene_sub$gene_name,
+                 OrgDb         = org.Hs.eg.db,
+                 keyType       = 'SYMBOL',
+                 ont           = "BP",
+                 pAdjustMethod = "BH",
+                 universe     = res_df$Gene_Sym,
+                 pvalueCutoff  = 0.05,
+                 qvalueCutoff  = 0.05)
+dotplot(Gene_go)
+
+```
+
+#Regulated genes bound
+```{r}
+rm(list=ls())
+
+Sum_JC<-function(x){sum(as.numeric(strsplit(x,split = ",")[[1]]))}
+Sum_Counts<-function(df){
+  df$IJC_Sum_1<-sapply(df$IJC_SAMPLE_1,Sum_JC)
+  df$IJC_Sum_2<-sapply(df$IJC_SAMPLE_2,Sum_JC)
+  df$SJC_Sum_1<-sapply(df$SJC_SAMPLE_1,Sum_JC)
+  df$SJC_Sum_2<-sapply(df$SJC_SAMPLE_2,Sum_JC)
+  df$Total_Count_1<-df$IJC_Sum_1+df$SJC_Sum_1
+  df$Total_Count_2<-df$IJC_Sum_2+df$SJC_Sum_2
+  return(df)
+}
+
+SE<-read.table("../Round1/rMATS/Pancreas/SE.MATS.JCEC.txt",header=T)
+SE<-Sum_Counts(SE)
+
+#Binding
+Gene<-read.table("Skipper/Peaks/SMNDC1_Gene.reproducible_enriched_windows.tsv",header=T)
+Tag<-read.table("Skipper/Peaks/SMNDC1_Tag.reproducible_enriched_windows.tsv",header=T)
+
+Gene<-Gene[which(Gene$q_min<0.05 & Gene$p_min<0.05 & Gene$enrichment_l2or_mean>1),]
+Tag<-Tag[which(Tag$q_min<0.05 & Tag$p_min<0.05 & Tag$enrichment_l2or_mean>1),]
+
+#Getting the Significant Events- GE
+SE_Sig<-SE[which(SE$Total_Count_1>=30 & SE$Total_Count_2>=30 & SE$PValue<0.05 & SE$FDR<0.05),]
+SE_ov<-list("SE \n Event"=SE_Sig$geneSymbol,"Bound \n Gene"=unique(c(Gene$gene_name,Tag$gene_name)))
+ggvenn::ggvenn(SE_ov,fill_color=c("#D5732E","#94B18E"),set_name_size=3,show_percentage=F,
+                  text_size=2.5,fill_alpha=0.6,stroke_size=0.5)+
+  coord_cartesian(ylim = c(-1.2, 2))+
+  theme(legend.position = "none",
+        panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank(),
+        legend.background = element_blank(),
+        axis.title = element_text(family="Arial",size=0, color="black"),
+        axis.text=element_text(family="Arial",size=0, color="black"),
+        textt=element_text(family="Arial", size=0,color="black"))
+ggsave("Figures/Splicing_bound_ov.pdf",height=1.25,width=1.5)
+
+phyper(346-1,2145,11592-2145,2516,lower.tail=F)
+
+
+###
+SE_sub<-SE_Sig[which(SE_Sig$geneSymbol %in% unique(c(Gene$gene_name,Tag$gene_name))),]
+SE_sub$Group<-ifelse(SE_sub$IncLevelDifference>0,"Skipped","Retained")
+
+SE_sub_tab<-data.frame(table(SE_sub$Group))
+SE_sub_tab$fraction = SE_sub_tab$Freq / sum(SE_sub_tab$Freq)
+SE_sub_tab$ymax = cumsum(SE_sub_tab$fraction)
+SE_sub_tab$ymin = c(0, head(SE_sub_tab$ymax, n = -1))
+SE_sub_tab$label_position = (SE_sub_tab$ymax + SE_sub_tab$ymin) / 2  # For text positioning
+SE_sub_tab$Label<-paste(SE_sub_tab$Var1,"\n=",SE_sub_tab$Freq,sep="")
+
+my_colors<-c("Skipped"="#FE0000","Retained"="#079BF5")
+ggplot(SE_sub_tab, aes(ymax = ymax, ymin = ymin, xmax = 1, xmin = 0, fill = Var1)) +
+  geom_rect(alpha=.8) +
+  coord_polar(theta = "y") +
+  theme_void() +
+  scale_fill_manual(values = my_colors) + 
+  geom_text(aes(x = 1.4, y = label_position, label = Label), size = 2) +
+  theme(legend.position = "none")
+ggsave("Figures/Splicing_bound_ov_direction.pdf",height=1.25,width=1.5)
+
+```
+
+#Regulated region bound
+```{r}
+rm(list=ls())
+
+Sum_JC<-function(x){sum(as.numeric(strsplit(x,split = ",")[[1]]))}
+Sum_Counts<-function(df){
+  df$IJC_Sum_1<-sapply(df$IJC_SAMPLE_1,Sum_JC)
+  df$IJC_Sum_2<-sapply(df$IJC_SAMPLE_2,Sum_JC)
+  df$SJC_Sum_1<-sapply(df$SJC_SAMPLE_1,Sum_JC)
+  df$SJC_Sum_2<-sapply(df$SJC_SAMPLE_2,Sum_JC)
+  df$Total_Count_1<-df$IJC_Sum_1+df$SJC_Sum_1
+  df$Total_Count_2<-df$IJC_Sum_2+df$SJC_Sum_2
+  return(df)
+}
+
+SE<-read.table("../Round1/rMATS/Pancreas/SE.MATS.JCEC.txt",header=T)
+SE<-Sum_Counts(SE)
+
+#Binding
+Gene<-read.table("Skipper/Peaks/SMNDC1_Gene.reproducible_enriched_windows.tsv",header=T)
+Tag<-read.table("Skipper/Peaks/SMNDC1_Tag.reproducible_enriched_windows.tsv",header=T)
+
+Gene<-Gene[which(Gene$q_min<0.05 & Gene$p_min<0.05 & Gene$enrichment_l2or_mean>1),]
+Tag<-Tag[which(Tag$q_min<0.05 & Tag$p_min<0.05 & Tag$enrichment_l2or_mean>1),]
+
+regions<-rbind(Gene,Tag)
+regions_gr<-makeGRangesFromDataFrame(regions,seqnames.field = "chr",start.field = "start",end.field = "end",strand.field = "strand")
+
+
+SE_Sig<-SE[which(SE$Total_Count_1>=30 & SE$Total_Count_2>=30 & SE$PValue<0.05 & SE$FDR<0.05),]
+SE_region<-makeGRangesFromDataFrame(SE_Sig,seqnames.field = "chr",start.field = "upstreamES",
+                                    end.field = "downstreamEE",strand.field = "strand")
+
+ov<-findOverlaps(SE_region,regions_gr)
+length(unique(queryHits(ov)))
+length(unique(subjectHits(ov)))
+
+
+#Getting the Significant Events- GE
+SE_ov<-list("SE \n Event"=SE_Sig$geneSymbol,"Bound \n Gene"=unique(c(Gene$gene_name,Tag$gene_name)))
+ggvenn::ggvenn(SE_ov,fill_color=c("#D5732E","#94B18E"),set_name_size=3,show_percentage=F,
+                  text_size=2.5,fill_alpha=0.6,stroke_size=0.5)+
+  coord_cartesian(ylim = c(-1.2, 2))+
+  theme(legend.position = "none",
+        panel.background = element_blank(), 
+        plot.background = element_blank(), 
+        panel.border = element_blank(),
+        legend.background = element_blank(),
+        axis.title = element_text(family="Arial",size=0, color="black"),
+        axis.text=element_text(family="Arial",size=0, color="black"),
+        textt=element_text(family="Arial", size=0,color="black"))
+ggsave("Figures/Splicing_bound_ov.pdf",height=1.25,width=1.5)
+
+phyper(346-1,2145,11592-2145,2516,lower.tail=F)
+
+
+###
+SE_sub<-SE_Sig[which(SE_Sig$geneSymbol %in% unique(c(Gene$gene_name,Tag$gene_name))),]
+SE_sub$Group<-ifelse(SE_sub$IncLevelDifference>0,"Skipped","Retained")
+
+SE_sub_tab<-data.frame(table(SE_sub$Group))
+SE_sub_tab$fraction = SE_sub_tab$Freq / sum(SE_sub_tab$Freq)
+SE_sub_tab$ymax = cumsum(SE_sub_tab$fraction)
+SE_sub_tab$ymin = c(0, head(SE_sub_tab$ymax, n = -1))
+SE_sub_tab$label_position = (SE_sub_tab$ymax + SE_sub_tab$ymin) / 2  # For text positioning
+SE_sub_tab$Label<-paste(SE_sub_tab$Var1,"\n=",SE_sub_tab$Freq,sep="")
+
+my_colors<-c("Skipped"="#FE0000","Retained"="#079BF5")
+ggplot(SE_sub_tab, aes(ymax = ymax, ymin = ymin, xmax = 1, xmin = 0, fill = Var1)) +
+  geom_rect(alpha=.8) +
+  coord_polar(theta = "y") +
+  theme_void() +
+  scale_fill_manual(values = my_colors) + 
+  geom_text(aes(x = 1.4, y = label_position, label = Label), size = 2) +
+  theme(legend.position = "none")
+ggsave("Figures/Splicing_bound_ov_direction.pdf",height=1.25,width=1.5)
+
+```
+
+#NS-RBNS-pie
+```{r}
+rm(list=ls())
+adapters<-read.table("NS_RBNS/SMNDC1_fa_adapter.RNAfold.table",sep="\t")
+adapters$Group<-sapply(adapters$V1,function(x){strsplit(x,"_")[[1]][1]})
+adapters<-adapters[c("V1","Group")]
+adapters$Group<-sapply(adapters$Group,function(x){gsub(">","",x)})
+adapters$GG<-ifelse(adapters$Group %in% c("Common","HA","GENO","Gene","PCBP1"),adapters$Group,"Unbound")
+adapters$GG[which(adapters$GG %in% c("Common"))]<-"Both"
+adapters$GG[which(adapters$GG %in% c("HA"))]<-"Anti-\nHA"
+adapters$GG[which(adapters$GG %in% c("Gene"))]<-"Anti-\nSMNDC1"
+adapters$GG[which(adapters$GG %in% c("PCBP1"))]<-"C-rich Seq"
+adapters$GG[which(adapters$GG %in% c("GENO"))]<-"sno/snRNA"
+adapters$GG[which(adapters$GG %in% c("Control"))]<-"Unbound"
+
+#Breaking Bound and unbound
+Mut<-data.frame(table(adapters$GG))
+Mut$fraction = Mut$Freq / sum(Mut$Freq)
+Mut$ymax = cumsum(Mut$fraction)
+Mut$ymin = c(0, head(Mut$ymax, n = -1))
+Mut$label_position = (Mut$ymax + Mut$ymin) / 2  # For text positioning
+Mut$Label<-paste(Mut$Var1,"=",Mut$Freq,sep="")
+
+
+#
+Bound<-Mut[which(Mut$Var1%in% c("Anti-\nHA","Both","Anti-\nSMNDC1")),]
+my_colors<-c("Anti-\nHA"="#08415C","Both"="#D26260","Anti-\nSMNDC1"="#789180")
+ggplot(Bound, aes(ymax = ymax, ymin = ymin, xmax = .7, xmin = 0, fill = Var1)) +
+  geom_rect() +
+  coord_polar(theta = "y",start=pi*1.7) +
+  theme_void() +
+  scale_fill_manual(values = my_colors) + 
+  geom_text(aes(x = 1, y = label_position, label = Label), size = 2.5,family="Arial") +
+  theme(legend.position = "none")
+ggsave("Figures/NSRBNS_pie_Bound.pdf",width=1.5,height=1.5)
+
+#
+UnBound<-Mut[which(Mut$Var1%in% c("C-rich Seq","Unbound","sno/snRNA")),]
+UnBound$Var1<-factor(UnBound$Var1,levels=c("C-rich Seq","Unbound","sno/snRNA"))
+UnBound$Label<-paste(UnBound$Var1,"\n=",UnBound$Freq,sep="")
+my_colors<-c("C-rich Seq"="#A379C9","Unbound"="#F5E2C8","sno/snRNA"="#00B2CA")
+ggplot(UnBound, aes(ymax = ymax, ymin = ymin, xmax = .7, xmin = 0, fill = Var1)) +
+  geom_rect() +
+  coord_polar(theta = "y",start=pi*1.7) +
+  theme_void() +
+  scale_fill_manual(values = my_colors) + 
+  geom_text(aes(x = 1, y = label_position, label = Label), size = 2.5,family="Arial") +
+  theme(legend.position = "none")
+ggsave("Figures/NSRBNS_pie_Unbound.pdf",width=1.5,height=1.5)
+
+```
+
+#NS-ecdf
+```{r,fig.height=1.5,fig.width=3}
+rm(list=ls())
+
+#New RBNS NS
+R_val<-read.table("NS_RBNS/Counts_comined.txt",header=T)
+rownames(R_val)<-R_val$ID
+R_val<-R_val[,-1]
+R_val_norm<-sweep(R_val,2,colSums(R_val),"/")
+R_val_norm<-R_val_norm[which(!(R_val_norm$Input_SMNDC1_nsRBNS_S14_R1_001==0)),]
+R_val_norm<-R_val_norm/R_val_norm$Input_SMNDC1_nsRBNS_S14_R1_001
+R_val_norm$FL_125<-rowMeans(R_val_norm[c("SMNDC1_nsRBNS_125_G_S8_R1_001","SMNDC1_nsRBNS_125_M_S9_R1_001")])
+
+R_val_norm_sub<-R_val_norm[c("FL_125")]
+R_val_norm_sub$ID<-rownames(R_val_norm_sub)
+
+
+#for summary files
+df<-R_val
+df$Identifier<-rownames(df)
+df<-df[c("Identifier","Input_SMNDC1_nsRBNS_S14_R1_001","SMNDC1_nsRBNS_125_G_S8_R1_001","SMNDC1_nsRBNS_125_M_S9_R1_001")]
+df<-df[which(df$Identifier %in% rownames(R_val_norm)),]
+df<-merge(df,R_val_norm_sub[c("ID","FL_125")],by.x="Identifier",by.y="ID")
+colnames(df)[5]<-"FL_125_Rval"
+
+R_val_norm_sub$Group<-sapply(R_val_norm_sub$ID,function(x){strsplit(x,"_")[[1]][1]})
+R_val_norm_sub$GG<-ifelse(R_val_norm_sub$Group %in% c("Common","HA","GENO","Gene","PCBP1"),R_val_norm_sub$Group,"Unbound")
+R_val_norm_sub$GG[which(R_val_norm_sub$GG %in% c("Common"))]<-"Bound in Both"
+R_val_norm_sub$GG[which(R_val_norm_sub$GG %in% c("HA"))]<-"Bound in Anti-HA"
+R_val_norm_sub$GG[which(R_val_norm_sub$GG %in% c("Gene"))]<-"Bound in Anti-SMNDC1"
+R_val_norm_sub$GG[which(R_val_norm_sub$GG %in% c("PCBP1"))]<-"C-rich Seq"
+R_val_norm_sub$GG[which(R_val_norm_sub$GG %in% c("GENO"))]<-"sno/snRNA"
+R_val_norm_sub$GG[which(R_val_norm_sub$GG %in% c("Control"))]<-"Unbound"
+
+ggplot(R_val_norm_sub,aes(x=FL_125,color=GG))+
+  stat_ecdf()+
+  scale_color_manual(values = c("Bound in Anti-HA"="#08415C","Bound in Both"="#D26260","Bound in Anti-SMNDC1"="#789180",
+                                "C-rich Seq"="#A379C9","Unbound"="#E3AE64","sno/snRNA"="#00B2CA"))+
+  theme_classic()+
+  geom_vline(xintercept = 1, linetype = "dashed")+
+  lims(x=c(0,3.5))+
+  labs(x="R value")+
+  theme(legend.position = c(.8,.2),
+        legend.key.size = unit(0.2, "cm"),
+        legend.spacing.y = unit(-0.15, "cm"),
+        axis.text=element_text(family="Arial",size=6, color="black"),
+        axis.title = element_text(family="Arial",size=6, color="black"),
+        legend.text = element_text(family="Arial",size=6, color="black"),
+        legend.title = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_blank(), 
+        panel.border = element_blank(),
+        legend.background = element_blank())
+ggsave("Figures/NS_ecdf_125.pdf",height=2,width=3)
+```
+
+
+
+
+
+
