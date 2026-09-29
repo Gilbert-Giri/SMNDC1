@@ -1,0 +1,527 @@
+---
+title: "CRASP"
+output: html_document
+date: "2026-04-13"
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#libraries
+```{r}
+library(ggplot2)
+library(ggrepel)
+library(reshape2)
+library(readxl)
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(cowplot)
+
+```
+
+#SE
+
+#single
+```{r,fig.width=3,fig.height=3}
+rm(list=ls())
+CE<-readxl::read_excel("MAPK3 CE screen hits.xlsx") %>% data.frame()
+CE<-CE[,c("HIT","gene_dPSI_MAPK3_HAP1_.E3_E4_E5.","gene_dPSI_MAPK3_RPE1_.E3_E4_E5.")]
+colnames(CE)<-c("HIT","HAP1","RPE1")
+single<-CE[!grepl("_",CE$HIT),]
+double<-CE[grepl("_",CE$HIT),]
+
+single_l<-reshape2::melt(single,id.vars = "HIT")
+double_l<-reshape2::melt(double,id.vars = "HIT")
+
+single_l$HIT<-factor(single_l$HIT,levels = single$HIT[order(single$HAP1,decreasing = T)])
+double_l$HIT<-factor(double_l$HIT,levels = double$HIT[order(double$HAP1,decreasing = T)])
+
+single_l$variable<-factor(single_l$variable,levels = c("RPE1","HAP1"))
+label_df <- data.frame(HIT = c("LSM4","PRPF8","MEPCE","EFTUD2","UBL5"))
+label_df2 <- data.frame(HIT = c("SRSF3","CDK9","SSRP1","EEF1AKMT3"))
+label_df3 <- data.frame(HIT = c("SMNDC1"))
+label_df4 <- data.frame(HIT = c("SON"))
+
+n_vars <- length(levels(factor(single_l$variable)))
+g<-ggplot(single_l, aes(x = variable, y = HIT, fill = value)) +
+  geom_tile(color = "#00000000", size =0) +
+  geom_text_repel(data = label_df,
+                  aes(x = n_vars + 0.5, y = HIT, label = HIT),
+                  inherit.aes = FALSE, hjust = 0, size = 3,
+                  direction = "y",
+                  nudge_x = .1,
+                  nudge_y = -15,
+                  segment.size = 0.2,
+                  segment.color = "grey50",
+                  min.segment.length = 0,
+                  force = 5,
+                  force_pull = 0.1,
+                  max.overlaps = Inf,
+                  xlim = c(n_vars + 1, Inf),
+                  ylim = c(-Inf, Inf),
+                  box.padding = 0) +
+  geom_text_repel(data = label_df2,
+                  aes(x = n_vars + 0.5, y = HIT, label = HIT),
+                  inherit.aes = FALSE, hjust = 0, size = 3,
+                  direction = "y",
+                  nudge_x = .1,
+                  nudge_y = 10,
+                  segment.size = 0.2,
+                  segment.color = "grey50",
+                  min.segment.length = 0,
+                  force = 5,
+                  force_pull = 0.1,
+                  max.overlaps = Inf,
+                  xlim = c(n_vars + 1, Inf),
+                  ylim = c(-Inf, Inf),
+                  box.padding = 0) +
+  geom_text_repel(data = label_df3,
+                  aes(x = n_vars + 0.5, y = HIT, label = HIT),
+                  inherit.aes = FALSE, hjust = 0, size = 3,
+                  direction = "y",
+                  color="red",
+                  nudge_x = .1,
+                  nudge_y = 0,
+                  segment.size = 0.2,
+                  segment.color = "grey50",
+                  min.segment.length = 0,
+                  force = 5,
+                  force_pull = 0.1,
+                  max.overlaps = Inf,
+                  xlim = c(n_vars + 1, Inf),
+                  ylim = c(-Inf, Inf),
+                  box.padding = 0) +
+  geom_text_repel(data = label_df4,
+                  aes(x = n_vars + 0.5, y = HIT, label = HIT),
+                  inherit.aes = FALSE, hjust = 0, size = 3,
+                  direction = "y",
+                  nudge_x = .1,
+                  nudge_y = 5,
+                  segment.size = 0.2,
+                  segment.color = "grey50",
+                  min.segment.length = 0,
+                  force = 5,
+                  force_pull = 0.1,
+                  max.overlaps = Inf,
+                  xlim = c(n_vars + 1, Inf),
+                  ylim = c(-Inf, Inf),
+                  box.padding = 0) +
+  scale_fill_gradient2(low = "#3F74CA", mid = "#FFFFFF", high = "red", midpoint = 0,
+                       na.value = "#00000000", limits = c(-61, 5)) +
+  theme_classic() +
+  coord_cartesian(clip = "off") +
+  theme(legend.position = "none",
+        axis.text.x = element_text(size = 8),
+        axis.text.y = element_blank(),
+        axis.title = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_blank(),
+        panel.border = element_blank(),
+        axis.ticks = element_blank(),
+        axis.line = element_blank(),
+        plot.margin = margin(t = 10, r = 150, b = 10, l = 10))
+
+ggsave("Mapk3_SE_single.pdf",g,height=3,width=3)
+
+
+g2<-ggplot(single_l, aes(x = variable, y = HIT, fill = value)) +
+  geom_tile(color = "black", size = 0.05)+
+  scale_fill_gradient2(low = "#3F74CA", mid = "#FFFFFF", high = "red", midpoint = 0,
+                       na.value = "#00000000", limits = c(-61, 5)) +
+  theme_classic() +
+  coord_cartesian(clip = "off") +
+  theme(legend.position = "right",
+        legend.title = element_blank(),
+        axis.text.x = element_text(size = 6),
+        axis.text.y = element_blank(),
+        axis.title = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_blank(),
+        panel.border = element_blank(),
+        axis.ticks = element_blank(),
+        axis.line = element_blank(),
+        plot.margin = margin(t = 10, r = 150, b = 10, l = 10))
+leg<-get_legend(g2)
+ggsave("Mapk3_SE_single_legend.pdf",leg,height=2,width=1)
+
+```
+
+#double
+```{r}
+rm(list=ls())
+CE<-readxl::read_excel("MAPK3 CE screen hits.xlsx") %>% data.frame()
+CE<-CE[,c("HIT","gene_dPSI_MAPK3_HAP1_.E3_E4_E5.","gene_dPSI_MAPK3_RPE1_.E3_E4_E5.")]
+colnames(CE)<-c("HIT","HAP1","RPE1")
+double<-CE[grepl("_",CE$HIT),]
+double_l<-reshape2::melt(double,id.vars = "HIT")
+double_l$HIT<-factor(double_l$HIT,levels = double$HIT[order(double$HAP1,decreasing = T)])
+
+double_l$variable<-factor(double_l$variable,levels = c("RPE1","HAP1"))
+label_df <- data.frame(HIT = c("PRPF8_p_CDC5L","PRPF8_p_SNRNP200","PRPF8_p_DDX23","SART3_p_PRPF31","SNRNP40_p_PRPF8"))
+label_df2 <- data.frame(HIT = c("CDK9_p_BRD4","KDM6B_p_BRD4","PUF60_p_KHSRP","EIF4A3_p_NXF1","CASC3_p_NXF1"))
+
+n_vars <- length(levels(factor(double_l$variable)))
+g<-ggplot(double_l, aes(x = variable, y = HIT, fill = value)) +
+  geom_tile(color = "#00000000", size =0) +
+  geom_text_repel(data = label_df,
+                  aes(x = n_vars + 0.5, y = HIT, label = HIT),
+                  inherit.aes = FALSE, hjust = 0, size = 3,
+                  direction = "y",
+                  nudge_x = .1,
+                  nudge_y = -20,
+                  segment.size = 0.2,
+                  segment.color = "grey50",
+                  min.segment.length = 0,
+                  force = 5,
+                  force_pull = 0.1,
+                  max.overlaps = Inf,
+                  xlim = c(n_vars + 1, Inf),
+                  ylim = c(-Inf, Inf),
+                  box.padding = 0) +
+  geom_text_repel(data = label_df2,
+                  aes(x = n_vars + 0.5, y = HIT, label = HIT),
+                  inherit.aes = FALSE, hjust = 0, size = 3,
+                  direction = "y",
+                  nudge_x = .1,
+                  nudge_y = 20,
+                  segment.size = 0.2,
+                  segment.color = "grey50",
+                  min.segment.length = 0,
+                  force = 5,
+                  force_pull = 0.1,
+                  max.overlaps = Inf,
+                  xlim = c(n_vars + 1, Inf),
+                  ylim = c(-Inf, Inf),
+                  box.padding = 0) +
+  scale_fill_gradient2(low = "#3F74CA", mid = "#FFFFFF", high = "red", midpoint = 0,
+                       na.value = "#00000000", limits = c(-61, 5)) +
+  theme_classic() +
+  coord_cartesian(clip = "off") +
+  theme(legend.position = "none",
+        axis.text.x = element_text(size = 8),
+        axis.text.y = element_blank(),
+        axis.title = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_blank(),
+        panel.border = element_blank(),
+        axis.ticks = element_blank(),
+        axis.line = element_blank(),
+        plot.margin = margin(t = 10, r = 150, b = 10, l = 10))
+
+ggsave("Mapk3_SE_double.pdf",g,height=3,width=3)
+
+
+g2<-ggplot(double_l, aes(x = variable, y = HIT, fill = value)) +
+  geom_tile(color = "black", size = 0.05)+
+  scale_fill_gradient2(low = "#3F74CA", mid = "#FFFFFF", high = "red", midpoint = 0,
+                       na.value = "#00000000", limits = c(-61, 5)) +
+  theme_classic() +
+  coord_cartesian(clip = "off") +
+  theme(legend.position = "right",
+        legend.title = element_blank(),
+        axis.text.x = element_text(size = 6),
+        axis.text.y = element_blank(),
+        axis.title = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_blank(),
+        panel.border = element_blank(),
+        axis.ticks = element_blank(),
+        axis.line = element_blank(),
+        plot.margin = margin(t = 10, r = 150, b = 10, l = 10))
+leg<-get_legend(g2)
+ggsave("Mapk3_SE_double_legend.pdf",leg,height=2,width=1)
+```
+
+#RI
+
+#single
+```{r,fig.width=3,fig.height=3}
+rm(list=ls())
+CE<-readxl::read_excel("MAPK3 IR screen hits.xlsx") %>% data.frame()
+CE<-CE[,c("HIT","gene_dPIR_MAPK3_HAP1_.E3_I3_E4_E5.","gene_dPIR_MAPK3_RPE1_.E3_I3_E4_E5.")]
+colnames(CE)<-c("HIT","HAP1","RPE1")
+single<-CE[!grepl("_",CE$HIT),]
+
+single_l<-reshape2::melt(single,id.vars = "HIT")
+
+single_l$HIT<-factor(single_l$HIT,levels = single$HIT[order(single$HAP1,decreasing = T)])
+
+single_l$variable<-factor(single_l$variable,levels = c("RPE1","HAP1"))
+label_df <- data.frame(HIT = c("SNW1","SNRPF","RBM25","SNRNP70","SF3A1"))
+label_df2 <- data.frame(HIT = c("VIRMA","THOC5","WTAP","ZC3H13","SUPT16H"))
+
+n_vars <- length(levels(factor(single_l$variable)))
+g<-ggplot(single_l, aes(x = variable, y = HIT, fill = value)) +
+  geom_tile(color = "#00000000", size =0) +
+  geom_text_repel(data = label_df2,
+                  aes(x = n_vars + 0.5, y = HIT, label = HIT),
+                  inherit.aes = FALSE, hjust = 0, size = 3,
+                  direction = "y",
+                  nudge_x = .1,
+                  nudge_y = -15,
+                  segment.size = 0.2,
+                  segment.color = "grey50",
+                  min.segment.length = 0,
+                  force = 5,
+                  force_pull = 0.1,
+                  max.overlaps = Inf,
+                  xlim = c(n_vars + 1, Inf),
+                  ylim = c(-Inf, Inf),
+                  box.padding = 0) +
+  geom_text_repel(data = label_df,
+                  aes(x = n_vars + 0.5, y = HIT, label = HIT),
+                  inherit.aes = FALSE, hjust = 0, size = 3,
+                  direction = "y",
+                  nudge_x = .1,
+                  nudge_y = 10,
+                  segment.size = 0.2,
+                  segment.color = "grey50",
+                  min.segment.length = 0,
+                  force = 5,
+                  force_pull = 0.1,
+                  max.overlaps = Inf,
+                  xlim = c(n_vars + 1, Inf),
+                  ylim = c(-Inf, Inf),
+                  box.padding = 0) +
+  scale_fill_gradient2(low = "#3F74CA", mid = "#FFFFFF", high = "red", midpoint = 0,
+                       na.value = "#00000000", limits = c(-4, 24)) +
+  theme_classic() +
+  coord_cartesian(clip = "off") +
+  theme(legend.position = "none",
+        axis.text.x = element_text(size = 8),
+        axis.text.y = element_blank(),
+        axis.title = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_blank(),
+        panel.border = element_blank(),
+        axis.ticks = element_blank(),
+        axis.line = element_blank(),
+        plot.margin = margin(t = 10, r = 150, b = 10, l = 10))
+
+ggsave("Mapk3_RI_single.pdf",g,height=3,width=3)
+
+
+g2<-ggplot(single_l, aes(x = variable, y = HIT, fill = value)) +
+  geom_tile(color = "black", size = 0.05)+
+  scale_fill_gradient2(low = "#3F74CA", mid = "#FFFFFF", high = "red", midpoint = 0,
+                       na.value = "#00000000", limits = c(-4, 24)) +
+  theme_classic() +
+  coord_cartesian(clip = "off") +
+  theme(legend.position = "right",
+        legend.title = element_blank(),
+        axis.text.x = element_text(size = 6),
+        axis.text.y = element_blank(),
+        axis.title = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_blank(),
+        panel.border = element_blank(),
+        axis.ticks = element_blank(),
+        axis.line = element_blank(),
+        plot.margin = margin(t = 10, r = 150, b = 10, l = 10))
+leg<-get_legend(g2)
+ggsave("Mapk3_RI_single_legend.pdf",leg,height=2,width=1)
+
+```
+
+#double
+```{r}
+rm(list=ls())
+CE<-readxl::read_excel("MAPK3 IR screen hits.xlsx") %>% data.frame()
+CE<-CE[,c("HIT","gene_dPIR_MAPK3_HAP1_.E3_I3_E4_E5.","gene_dPIR_MAPK3_RPE1_.E3_I3_E4_E5.")]
+colnames(CE)<-c("HIT","HAP1","RPE1")
+double<-CE[grepl("_",CE$HIT),]
+double_l<-reshape2::melt(double,id.vars = "HIT")
+double_l$HIT<-factor(double_l$HIT,levels = double$HIT[order(double$HAP1,decreasing = T)])
+
+double_l$variable<-factor(double_l$variable,levels = c("RPE1","HAP1"))
+label_df <- data.frame(HIT = c("RBM15_p_RBM15B","CDK9_p_BRD4","METTL3_p_YTHDF2","DDX17_p_DDX5","SBNO1_p_SBNO2"))
+label_df2 <- data.frame(HIT = c("SNRNP70_p_SF3A3","SNRNP70_p_U2AF2","MAPK3_p_KRAS","MAPK3_p_MTOR","SART3_p_U2AF2"))
+
+n_vars <- length(levels(factor(double_l$variable)))
+g<-ggplot(double_l, aes(x = variable, y = HIT, fill = value)) +
+  geom_tile(color = "#00000000", size =0) +
+  geom_text_repel(data = label_df,
+                  aes(x = n_vars + 0.5, y = HIT, label = HIT),
+                  inherit.aes = FALSE, hjust = 0, size = 3,
+                  direction = "y",
+                  nudge_x = .1,
+                  nudge_y = -20,
+                  segment.size = 0.2,
+                  segment.color = "grey50",
+                  min.segment.length = 0,
+                  force = 5,
+                  force_pull = 0.1,
+                  max.overlaps = Inf,
+                  xlim = c(n_vars + 1, Inf),
+                  ylim = c(-Inf, Inf),
+                  box.padding = 0) +
+  geom_text_repel(data = label_df2,
+                  aes(x = n_vars + 0.5, y = HIT, label = HIT),
+                  inherit.aes = FALSE, hjust = 0, size = 3,
+                  direction = "y",
+                  nudge_x = .1,
+                  nudge_y = 20,
+                  segment.size = 0.2,
+                  segment.color = "grey50",
+                  min.segment.length = 0,
+                  force = 5,
+                  force_pull = 0.1,
+                  max.overlaps = Inf,
+                  xlim = c(n_vars + 1, Inf),
+                  ylim = c(-Inf, Inf),
+                  box.padding = 0) +
+  scale_fill_gradient2(low = "#3F74CA", mid = "#FFFFFF", high = "red", midpoint = 0,
+                       na.value = "#00000000", limits = c(-4, 24)) +
+  theme_classic() +
+  coord_cartesian(clip = "off") +
+  theme(legend.position = "none",
+        axis.text.x = element_text(size = 8),
+        axis.text.y = element_blank(),
+        axis.title = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_blank(),
+        panel.border = element_blank(),
+        axis.ticks = element_blank(),
+        axis.line = element_blank(),
+        plot.margin = margin(t = 10, r = 150, b = 10, l = 10))
+
+ggsave("Mapk3_RI_double.pdf",g,height=3,width=3)
+
+
+g2<-ggplot(double_l, aes(x = variable, y = HIT, fill = value)) +
+  geom_tile(color = "black", size = 0.05)+
+  scale_fill_gradient2(low = "#3F74CA", mid = "#FFFFFF", high = "red", midpoint = 0,
+                       na.value = "#00000000", limits = c(-4, 24)) +
+  theme_classic() +
+  coord_cartesian(clip = "off") +
+  theme(legend.position = "right",
+        legend.title = element_blank(),
+        axis.text.x = element_text(size = 6),
+        axis.text.y = element_blank(),
+        axis.title = element_blank(),
+        panel.background = element_blank(),
+        plot.background = element_blank(),
+        panel.border = element_blank(),
+        axis.ticks = element_blank(),
+        axis.line = element_blank(),
+        plot.margin = margin(t = 10, r = 150, b = 10, l = 10))
+leg<-get_legend(g2)
+ggsave("Mapk3_RI_double_legend.pdf",leg,height=2,width=1)
+```
+
+#Gene Ontology-CE
+```{r}
+rm(list=ls())
+
+CE<-readxl::read_excel("MAPK3 CE screen hits.xlsx") %>% data.frame()
+single<-CE[!grepl("_",CE$HIT),]
+double<-CE[grepl("_",CE$HIT),]
+
+
+bp <-enrichGO(gene= single$HIT,
+              OrgDb= org.Hs.eg.db,
+              keyType= 'SYMBOL',
+              ont= "BP",
+              pAdjustMethod = "BH",
+              pvalueCutoff = 0.05,
+              qvalueCutoff = 0.05)
+
+bp@result<-bp@result[which(bp@result$Description %in% c("RNA splicing","protein-RNA complex assembly","snRNA processing",
+                                                        "U2-type prespliceosome assembly","snRNA transcription")),]
+
+update_geom_defaults("point", list(stroke = 0))
+g <- dotplot(bp, label_format = 25) +
+  scale_size_area(max_size = 3, breaks = c(20, 60)) +          # 2 circles instead of 3
+  scale_x_continuous(limits = c(0, 0.8), breaks = c(0, 0.4, 0.8)) +
+  scale_fill_continuous(low = "#e06666", high = "#3d85c6",
+                        transform = "log10",
+                        breaks = c(1e-40, 1e-20),
+                        labels = scales::label_scientific(digits = 1),
+                        guide = guide_colorbar(reverse = TRUE,
+                                               barwidth = unit(0.1, "cm"),
+                                               barheight = unit(0.5, "cm"))) +
+  theme_classic() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(1, 0),
+        legend.justification = c(1, 0),
+        legend.box = "vertical",
+        legend.box.just = "bottom",
+        axis.text = element_text(size = 4, color = "black"),
+        axis.title = element_text(size = 4, color = "black"),
+        legend.text = element_text(size = 3, margin = margin(l = 1)),
+        legend.key.size = unit(0.1, "cm"),
+        legend.margin = margin(0, 0, 0, 0),
+        legend.spacing.x = unit(0.15, "cm"),
+        legend.spacing.y = unit(0.1, "cm"),
+        legend.title = element_text(size = 3.5,margin = margin(b = 1)),
+        panel.background = element_blank(),
+        plot.background = element_blank(),
+        legend.background = element_blank(),
+        axis.line = element_line(linewidth = 0.15),
+        axis.ticks = element_line(linewidth = 0.15))
+g
+ggsave("CE_GO.pdf",width=1.4,height=1.5)
+
+```
+
+#Gene Ontology-RI
+```{r,fig.width=6,fig.height=6}
+rm(list=ls())
+
+CE<-readxl::read_excel("MAPK3 IR screen hits.xlsx") %>% data.frame()
+single<-CE[!grepl("_",CE$HIT),]
+double<-CE[grepl("_",CE$HIT),]
+
+
+bp <-enrichGO(gene= single$HIT,
+              OrgDb= org.Hs.eg.db,
+              keyType= 'SYMBOL',
+              ont= "BP",
+              pAdjustMethod = "BH",
+              pvalueCutoff = 0.05,
+              qvalueCutoff = 0.05)
+
+bp@result<-bp@result[which(bp@result$Description %in% c("RNA splicing","spliceosomal complex assembly","mRNA transport",
+                                                        "U2-type prespliceosome assembly","protein-RNA complex organization")),]
+
+update_geom_defaults("point", list(stroke = 0))
+g <- dotplot(bp, label_format = 25) +
+  scale_x_continuous(limits = c(0, 0.8), breaks = c(0, 0.4, 0.8)) +
+  scale_size_area(max_size = 3, breaks = scales::breaks_pretty(n = 2),
+                  guide = guide_legend(order = 2)) +
+  scale_fill_continuous(low = "#e06666", high = "#3d85c6",
+                        transform = "log10",
+                        breaks = scales::breaks_log(n = 3),
+                        labels = scales::label_scientific(digits = 1),
+                        guide = guide_colorbar(order = 1,reverse = TRUE,
+                                               barwidth = unit(0.1, "cm"),
+                                               barheight = unit(0.5, "cm"))) +
+  theme_classic() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(1, .1),
+        legend.justification = c(1, 0),
+        legend.box = "vertical",
+        legend.box.just = "bottom",
+        axis.text = element_text(size = 4, color = "black"),
+        axis.title = element_text(size = 4, color = "black"),
+        legend.text = element_text(size = 3, margin = margin(l = 1)),
+        legend.key.size = unit(0.1, "cm"),
+        legend.margin = margin(0, 0, 0, 0),
+        legend.spacing.x = unit(0.15, "cm"),
+        legend.spacing.y = unit(0.1, "cm"),
+        legend.title = element_text(size = 3.5,margin = margin(b = 1)),
+        panel.background = element_blank(),
+        plot.background = element_blank(),
+        legend.background = element_blank(),
+        axis.line = element_line(linewidth = 0.15),
+        axis.ticks = element_line(linewidth = 0.15))
+g
+ggsave("RI_GO.pdf",width=1.4,height=1.5)
+
+```
+
+
+
